@@ -1,0 +1,47 @@
+{
+  "data": {
+    "edf": "data/raw/chb01_03.edf",
+    "summary": "data/raw/chb01-summary.txt",
+    "manifest": "data/raw/download_manifest.json",
+    "derived_dir": "data/derived"
+  },
+  "channels": {
+    "minimum": 4,
+    "avoid_duplicates": true,
+    "selection_file": "data/derived/channel_selection.json"
+  },
+  "analysis": {
+    "window_s": [2876, 3156]
+  },
+  "filter": {
+    "type": "Butterworth",
+    "order": 4,
+    "low_hz": 0.5,
+    "high_hz": 40.0,
+    "method": "sosfiltfilt",
+    "offline": true
+  },
+  "epochs": {
+    "durations_s": [2, 4, 8],
+    "step_fraction": 0.5
+  },
+  "welch": {
+    "window": "hann",
+    "segment_s": 2.0,
+    "overlap": 0.5,
+    "resolution_hz": 0.5,
+    "scaling": "density"
+  },
+  "bands_hz": {
+    "delta": [0.5, 4],
+    "theta": [4, 8],
+    "alpha": [8, 13],
+    "beta": [13, 30],
+    "high_30_40": [30, 40]
+  },
+  "quality": {
+    "flat_threshold_uv": 0.1,
+    "extreme_threshold_uv": 600.0,
+    "rail_tolerance_lsb": 1.0
+  }
+}

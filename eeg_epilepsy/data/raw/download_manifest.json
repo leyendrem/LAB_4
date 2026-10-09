@@ -1,0 +1,20 @@
+{
+  "chb01_03.edf": {
+    "dataset": "CHB-MIT Scalp EEG Database",
+    "version": "1.0.0",
+    "url": "https://physionet-open.s3.amazonaws.com/chbmit/1.0.0/chb01/chb01_03.edf",
+    "downloaded_at_utc": "2026-10-07T02:20:28.660909+00:00",
+    "relative_path": "data/raw/chb01_03.edf",
+    "size_bytes": 42399744,
+    "sha256": "4c4a95a9b4331aeaadadd538763eb2e735950d9aa615b85ee6246c784be8ae90"
+  },
+  "chb01-summary.txt": {
+    "dataset": "CHB-MIT Scalp EEG Database",
+    "version": "1.0.0",
+    "url": "https://physionet-open.s3.amazonaws.com/chbmit/1.0.0/chb01/chb01-summary.txt",
+    "downloaded_at_utc": "2026-10-07T02:20:29.101548+00:00",
+    "relative_path": "data/raw/chb01-summary.txt",
+    "size_bytes": 5355,
+    "sha256": "77e86183845192d147c88a9bb4263c2b4a32e936c6236029770f86ca2ea023db"
+  }
+}

@@ -1,0 +1,26 @@
+[
+  {
+    "channel_a": "T8-P8-0",
+    "channel_b": "T8-P8-1",
+    "comparison": "a_equals_b",
+    "samples_compared": 921600,
+    "max_difference_uv": 0.0,
+    "rmse_uv": 0.0,
+    "mean_difference_uv": 0.0,
+    "std_difference_uv": 0.0,
+    "tolerance_uv": 1e-06,
+    "numerically_equivalent": true
+  },
+  {
+    "channel_a": "T7-P7",
+    "channel_b": "P7-T7",
+    "comparison": "a_equals_minus_b",
+    "samples_compared": 921600,
+    "max_difference_uv": 0.3907203907204462,
+    "rmse_uv": 0.3907203907203893,
+    "mean_difference_uv": 0.3907203907203893,
+    "std_difference_uv": 4.6660682110753405e-15,
+    "tolerance_uv": 1e-06,
+    "numerically_equivalent": false
+  }
+]

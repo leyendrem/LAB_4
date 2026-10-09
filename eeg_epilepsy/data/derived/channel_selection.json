@@ -1,0 +1,33 @@
+{
+  "file": "chb01_03.edf",
+  "excluded_channels": [
+    {
+      "name": "T8-P8-1",
+      "reason": "Duplicado exacto de T8-P8-0 en todo el registro"
+    },
+    {
+      "name": "P7-T7",
+      "reason": "Redundante con T7-P7: polaridad invertida y desplazamiento constante de 0.390720391 microvoltios"
+    }
+  ],
+  "provisional_review_channels": [
+    "FP1-F7",
+    "F7-T7",
+    "FP2-F8",
+    "F8-T8"
+  ],
+  "quality_review_complete": false,
+  "policy": "El EDF original se conserva completo. excluded_channels se omite únicamente de los canales seleccionados para análisis; no implica mala calidad.",
+  "retained_redundant_pairs": [
+    {
+      "retained": "T8-P8-0",
+      "excluded": "T8-P8-1",
+      "reason": "Duplicado exacto; evita duplicar métricas."
+    },
+    {
+      "retained": "T7-P7",
+      "excluded": "P7-T7",
+      "reason": "Derivación redundante con polaridad invertida y offset constante."
+    }
+  ]
+}

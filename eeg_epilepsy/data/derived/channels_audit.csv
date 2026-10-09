@@ -1,0 +1,24 @@
+﻿index,original_name,mne_name,original_unit,duplicate_name,dummy,eeg_candidate,decision,reason
+0,FP1-F7,FP1-F7,uV,False,False,True,candidato,Confirmar montaje y trazado antes de seleccionar
+1,F7-T7,F7-T7,uV,False,False,True,candidato,Confirmar montaje y trazado antes de seleccionar
+2,T7-P7,T7-P7,uV,False,False,True,candidato,Confirmar montaje y trazado antes de seleccionar
+3,P7-O1,P7-O1,uV,False,False,True,candidato,Confirmar montaje y trazado antes de seleccionar
+4,FP1-F3,FP1-F3,uV,False,False,True,candidato,Confirmar montaje y trazado antes de seleccionar
+5,F3-C3,F3-C3,uV,False,False,True,candidato,Confirmar montaje y trazado antes de seleccionar
+6,C3-P3,C3-P3,uV,False,False,True,candidato,Confirmar montaje y trazado antes de seleccionar
+7,P3-O1,P3-O1,uV,False,False,True,candidato,Confirmar montaje y trazado antes de seleccionar
+8,FP2-F4,FP2-F4,uV,False,False,True,candidato,Confirmar montaje y trazado antes de seleccionar
+9,F4-C4,F4-C4,uV,False,False,True,candidato,Confirmar montaje y trazado antes de seleccionar
+10,C4-P4,C4-P4,uV,False,False,True,candidato,Confirmar montaje y trazado antes de seleccionar
+11,P4-O2,P4-O2,uV,False,False,True,candidato,Confirmar montaje y trazado antes de seleccionar
+12,FP2-F8,FP2-F8,uV,False,False,True,candidato,Confirmar montaje y trazado antes de seleccionar
+13,F8-T8,F8-T8,uV,False,False,True,candidato,Confirmar montaje y trazado antes de seleccionar
+14,T8-P8,T8-P8-0,uV,True,False,True,candidato,Confirmar montaje y trazado antes de seleccionar
+15,P8-O2,P8-O2,uV,False,False,True,candidato,Confirmar montaje y trazado antes de seleccionar
+16,FZ-CZ,FZ-CZ,uV,False,False,True,candidato,Confirmar montaje y trazado antes de seleccionar
+17,CZ-PZ,CZ-PZ,uV,False,False,True,candidato,Confirmar montaje y trazado antes de seleccionar
+18,P7-T7,P7-T7,uV,False,False,True,candidato,Confirmar montaje y trazado antes de seleccionar
+19,T7-FT9,T7-FT9,uV,False,False,True,candidato,Confirmar montaje y trazado antes de seleccionar
+20,FT9-FT10,FT9-FT10,uV,False,False,True,candidato,Confirmar montaje y trazado antes de seleccionar
+21,FT10-T8,FT10-T8,uV,False,False,True,candidato,Confirmar montaje y trazado antes de seleccionar
+22,T8-P8,T8-P8-1,uV,True,False,True,revisar,Nombre repetido: comprobar equivalencia de señales

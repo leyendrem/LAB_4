@@ -1,0 +1,29 @@
+{
+  "file": "chb01_03.edf",
+  "fs_hz": 256.0,
+  "header_channel_frequencies_hz": [
+    256.0
+  ],
+  "n_samples": 921600,
+  "duration_s": 3600.0,
+  "n_channels": 23,
+  "original_units": [
+    "uV"
+  ],
+  "nominal_256_hz_matches": true,
+  "all_header_channels_256_hz": true,
+  "n_annotated_seizures": 1,
+  "annotated_ictal_duration_s": 40.0,
+  "dummy_channel_count": 0,
+  "unrecognized_channel_count": 0,
+  "duplicate_original_names": [
+    "T8-P8"
+  ],
+  "prefilter_values": [
+    ""
+  ],
+  "analysis_start_s": 2876,
+  "analysis_end_s": 3156,
+  "analysis_range_inside_record": true,
+  "channel_review_complete": false
+}
