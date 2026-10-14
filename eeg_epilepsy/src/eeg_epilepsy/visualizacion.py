@@ -5,6 +5,7 @@ No calcula diagnósticos ni modifica las métricas del pipeline.
 from __future__ import annotations
 
 import pandas as pd
+import numpy as np
 import plotly.graph_objects as go
 
 
@@ -26,6 +27,86 @@ STATES = {
     "sin_crisis_anotada": "Sin crisis anotada",
     "transicion": "Ventana parcialmente cubierta por la crisis",
 }
+
+STATE_COLORS = {"ictal": "#D64550", "sin_crisis_anotada": "#146C94"}
+
+
+def psd_figure(psd: pd.DataFrame, channel: str, window_s: float,
+               logarithmic: bool = True) -> go.Figure:
+    """PSD mediana exportada: todo el intervalo analizado, sin filtro de calidad.
+
+    El CSV no conserva espectros individuales ni sesión. El llamador debe
+    verificar su procedencia; no se puede recortar ni recalcular su mediana.
+    """
+    fig = go.Figure()
+    for state, color in STATE_COLORS.items():
+        rows = psd.loc[(psd.channel == channel) & (psd.window_s == window_s)
+                       & (psd.state == state)].sort_values("freq_hz")
+        if rows.empty:
+            continue
+        y = pd.to_numeric(rows.psd_median_uv2_per_hz, errors="coerce")
+        y = y.where(np.isfinite(y) & (y > 0 if logarithmic else y >= 0))
+        fig.add_trace(go.Scatter(
+            x=rows.freq_hz, y=y, mode="lines", connectgaps=False,
+            name=f"{STATES[state]} (n={int(rows.n_epochs.iloc[0])})",
+            line=dict(color=color, width=2),
+            hovertemplate="%{x:.1f} Hz<br>%{y:.3g} µV²/Hz<extra>%{fullData.name}</extra>",
+        ))
+    fig.update_layout(template="plotly_white", title=f"Distribución espectral · {channel}",
+                      xaxis_title="Frecuencia (Hz)", yaxis_title="PSD mediana (µV²/Hz)",
+                      legend=dict(orientation="h", y=-0.25))
+    fig.update_yaxes(type="log" if logarithmic else "linear")
+    if not fig.data:
+        fig.add_annotation(text="No hay espectros para esta selección.", x=0.5, y=0.5,
+                           xref="paper", yref="paper", showarrow=False)
+    return fig
+
+
+def histogram_figure(metrics: pd.DataFrame, channel: str, window_s: float,
+                     metric: str, time_range: tuple[float, float],
+                     exclude_flagged: bool = False, bins: int = 20) -> go.Figure:
+    """Distribución porcentual por estado, con límites de bins compartidos.
+
+    Incluye solo ventanas completas dentro del intervalo. Excluye transición,
+    valores no finitos y, opcionalmente, ventanas marcadas por calidad.
+    """
+    if metrics.session.nunique() > 1:
+        raise ValueError("Selecciona una sola sesión antes de graficar.")
+    if bins < 1:
+        raise ValueError("El número de intervalos debe ser positivo.")
+    title, unit = METRICS[metric]
+    rows = metrics.loc[(metrics.channel == channel) & (metrics.window_s == window_s)
+                       & (metrics.start_s >= time_range[0]) & (metrics.end_s <= time_range[1])
+                       & metrics.state.isin(STATE_COLORS)].copy()
+    if exclude_flagged:
+        rows = rows.loc[~rows.quality_flag.astype(str).str.lower().isin(["true", "1"])]
+    rows[metric] = pd.to_numeric(rows[metric], errors="coerce")
+    rows = rows.loc[np.isfinite(rows[metric])].copy()
+    if metric.endswith("_rel"):
+        rows[metric] *= 100
+    fig = go.Figure()
+    if not rows.empty:
+        edges = np.histogram_bin_edges(rows[metric], bins=bins)
+        for state, color in STATE_COLORS.items():
+            values = rows.loc[rows.state == state, metric]
+            if values.empty:
+                continue
+            counts, _ = np.histogram(values, bins=edges)
+            fig.add_trace(go.Bar(
+                x=(edges[:-1] + edges[1:]) / 2, y=100 * counts / len(values),
+                width=np.diff(edges), name=f"{STATES[state]} (n={len(values)})",
+                marker_color=color, opacity=0.6,
+                customdata=np.column_stack([edges[:-1], edges[1:], counts]),
+                hovertemplate="Rango: %{customdata[0]:.3g}–%{customdata[1]:.3g} " + unit +
+                "<br>%{y:.1f}% · %{customdata[2]:.0f} ventanas<extra>%{fullData.name}</extra>",
+            ))
+    else:
+        fig.add_annotation(text="No hay ventanas completas comparables en este intervalo.",
+                           x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False)
+    fig.update_layout(template="plotly_white", title=f"Distribución de {title.lower()}",
+                      xaxis_title=f"{title} ({unit})", yaxis_title="Ventanas de cada estado (%)",
+                      barmode="overlay", legend=dict(orientation="h", y=-0.25))
+    return fig
 
 
 def trend_figure(
