@@ -209,3 +209,60 @@ def trend_figure(
         font=dict(size=11, color="#586575"),
     )
     return fig
+
+
+def signal_figure(raw_uv, filtered_uv, fs: float, start_s: float,
+                  channel: str, events: pd.DataFrame, show_raw: bool = False) -> go.Figure:
+    """Trazado de un segmento en µV, sin reducir ni interpolar muestras."""
+    time = start_s + np.arange(len(filtered_uv)) / fs
+    fig = go.Figure()
+    if show_raw:
+        fig.add_trace(go.Scattergl(x=time, y=raw_uv, name="Original", mode="lines",
+                                  line=dict(color="#8995A5", width=1), opacity=0.65))
+    fig.add_trace(go.Scattergl(x=time, y=filtered_uv, name="Filtrada", mode="lines",
+                              line=dict(color="#146C94", width=1)))
+    fig.update_layout(template="plotly_white", title=f"Trazado EEG · {channel}",
+                      xaxis_title="Tiempo desde el inicio del registro (s)",
+                      yaxis_title="Amplitud (µV)", legend=dict(orientation="h"))
+    if len(time):
+        for event in events.itertuples():
+            if event.end_s > time[0] and event.start_s < time[-1]:
+                fig.add_vrect(x0=max(time[0], event.start_s), x1=min(time[-1], event.end_s),
+                              fillcolor="#D64550", opacity=0.12, line_width=0,
+                              annotation_text="Crisis anotada")
+        fig.update_xaxes(range=[time[0], time[-1]])
+    return fig
+
+
+def spectrogram_figure(x_uv, fs: float, start_s: float, channel: str,
+                       events: pd.DataFrame, segment_s: float = 2,
+                       overlap: float = 0.5, low_hz: float = 0.5,
+                       high_hz: float = 40) -> go.Figure:
+    """PSD por segmento Hann; color en dB respecto a 1 µV²/Hz.
+
+    La entrada ya está en µV y filtrada. No usa la mediana por estado.
+    """
+    from scipy.signal import spectrogram
+    nperseg = int(round(segment_s * fs))
+    if len(x_uv) < nperseg:
+        raise ValueError(f"Selecciona al menos {segment_s:g} segundos para el espectrograma.")
+    f, t, power = spectrogram(np.asarray(x_uv), fs=fs, window="hann",
+                              nperseg=nperseg, noverlap=int(nperseg * overlap),
+                              detrend="constant", scaling="density", mode="psd")
+    keep = (f >= low_hz) & (f <= high_hz)
+    db = 10 * np.log10(np.maximum(power[keep], np.finfo(float).tiny))
+    fig = go.Figure(go.Heatmap(
+        x=start_s + t, y=f[keep], z=db, colorscale="Cividis",
+        colorbar=dict(title="dB<br>ref. 1 µV²/Hz"),
+        hovertemplate="%{x:.2f} s<br>%{y:.1f} Hz<br>%{z:.1f} dB<extra></extra>",
+    ))
+    end_s = start_s + len(x_uv) / fs
+    for event in events.itertuples():
+        for boundary, label in [(event.start_s, "Inicio de crisis"), (event.end_s, "Fin de crisis")]:
+            if start_s <= boundary <= end_s:
+                fig.add_vline(x=boundary, line_color="#D64550", line_dash="dash",
+                              annotation_text=label)
+    fig.update_layout(template="plotly_white", title=f"Espectrograma · {channel}",
+                      xaxis_title="Tiempo desde el inicio del registro (s)",
+                      yaxis_title="Frecuencia (Hz)")
+    return fig
