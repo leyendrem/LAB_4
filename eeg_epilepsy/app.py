@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "src"))
 st.set_page_config(page_title="Revisión de EEG", page_icon="🧠", layout="wide")
 try:
-    from eeg_epilepsy.visualization import METRICS, trend_figure, psd_figure, histogram_figure
+    from eeg_epilepsy.visualization import METRICS, trend_figure, psd_figure, histogram_figure, signal_figure, spectrogram_figure
 except (ModuleNotFoundError, ImportError):
     st.error("No se encontró la versión necesaria de visualization.py.")
     st.code(str(ROOT / "src/eeg_epilepsy/visualization.py"))
@@ -33,7 +33,7 @@ def load_results(root: str, versions: tuple):
 
 
 st.title("Revisión de EEG")
-st.caption("Versión 0.2 · Tendencias, PSD e histogramas")
+st.caption("Versión 0.3 · Tendencias, PSD, histogramas y detalle EEG")
 try:
     config_path = ROOT / "config/analysis_config.json"
     config = json.loads(config_path.read_text())
@@ -93,7 +93,7 @@ else:
     periods = "; ".join(f"{r.start_s:g}–{r.end_s:g} s" for r in visible_events.itertuples())
     st.info(f"Crisis según anotaciones del registro: {periods}.")
 
-trend_tab, psd_tab, hist_tab = st.tabs(["Evolución temporal", "Comparación espectral", "Distribución de indicadores"])
+trend_tab, psd_tab, hist_tab, detail_tab = st.tabs(["Evolución temporal", "Comparación espectral", "Distribución de indicadores", "Detalle EEG"])
 with trend_tab:
     fig = trend_figure(selected, session_events, channel, window, metric, interval, exclude)
     st.plotly_chart(fig, width="stretch", key="trend")
@@ -135,6 +135,67 @@ with hist_tab:
                     width="stretch", key="histogram")
     st.caption("El solapamiento entre distribuciones y el número de ventanas deben considerarse al interpretar. No se realizan pruebas de significancia ni clasificación diagnóstica.")
 
+with detail_tab:
+    st.subheader("Inspección del segmento EEG")
+    st.caption("Trazado y espectrograma de la derivación seleccionada. El color del espectrograma representa potencia, no probabilidad de crisis.")
+    edf_path = ROOT / config["data"]["edf"]
+    if not edf_path.exists():
+        st.info("Para habilitar esta vista, descarga el registro EDF desde la carpeta eeg_epilepsy:")
+        st.code("uv run python scripts/download_data.py", language="bash")
+    elif edf_path.stem != str(session):
+        st.warning("El EDF configurado no corresponde al registro seleccionado.")
+    elif st.checkbox("Cargar trazado y espectrograma", key="load_eeg"):
+        @st.cache_data(max_entries=4, show_spinner="Leyendo y filtrando la derivación…")
+        def load_channel(path, version, channel_name, filter_json, expected_hash):
+            import hashlib
+            from eeg_epilepsy.io import read_edf, get_channel_uv
+            from eeg_epilepsy.preprocessing import preprocess_channel
+            if expected_hash:
+                with open(path, "rb") as source:
+                    actual = hashlib.file_digest(source, "sha256").hexdigest()
+                if actual != expected_hash:
+                    raise ValueError("El EDF no coincide con la huella de los resultados guardados.")
+            raw, meta = read_edf(path)
+            try:
+                original = get_channel_uv(raw, channel_name)
+                fc = json.loads(filter_json)
+                stages = preprocess_channel(original, meta["fs"], fc["low_hz"], fc["high_hz"], fc["order"])
+                return stages, meta["fs"]
+            finally:
+                raw.close()
+        try:
+            import numpy as np
+            used_config = metadata.get("config", config)
+            fc = used_config["filter"]
+            stages, fs = load_channel(str(edf_path), (edf_path.stat().st_mtime_ns, edf_path.stat().st_size),
+                                      channel, json.dumps(fc, sort_keys=True), metadata.get("traceability", {}).get("edf_sha256"))
+            if interval[1] > len(stages["raw_uv"]) / fs:
+                raise ValueError("El intervalo excede la duración del EDF.")
+            max_duration = min(30.0, interval[1] - interval[0])
+            duration = st.number_input("Duración del detalle (s)", min_value=1.0,
+                                       max_value=max_duration, value=min(10.0, max_duration), step=1.0)
+            detail_start = st.number_input("Inicio del detalle (s)", min_value=interval[0],
+                                           max_value=interval[1] - duration, value=interval[0], step=1.0)
+            show_raw = st.checkbox("Comparar con señal original", value=False)
+            first, last = int(round(detail_start * fs)), int(round((detail_start + duration) * fs))
+            original = stages["raw_uv"][first:last]
+            filtered = stages["filtered_uv"][first:last]
+            st.plotly_chart(signal_figure(original, filtered, fs, first/fs, channel, session_events, show_raw),
+                            width="stretch", key="eeg_signal")
+            st.caption(f"Filtro {fc['low_hz']:g}–{fc['high_hz']:g} Hz, aplicado al canal completo antes de recortar. "
+                       "El trazado conserva todas las muestras; las ventanas marcadas por calidad no se borran de esta vista.")
+            wc = used_config["welch"]
+            if duration >= wc["segment_s"]:
+                st.plotly_chart(spectrogram_figure(filtered, fs, first/fs, channel, session_events,
+                                                   wc["segment_s"], wc["overlap"], fc["low_hz"], fc["high_hz"]),
+                                width="stretch", key="spectrogram")
+                st.caption(f"Segmentos Hann de {wc['segment_s']:g} s y solapamiento de {100*wc['overlap']:g}%. "
+                           "La escala de color se ajusta al segmento; consulta los valores al comparar vistas.")
+            else:
+                st.info(f"Amplía el detalle a {wc['segment_s']:g} s para calcular el espectrograma.")
+        except (OSError, ValueError, KeyError, ImportError) as error:
+            st.error(f"No se pudo mostrar el EEG: {error}")
+
 with st.expander("Detalles del análisis"):
     st.write("Intervalo con métricas disponibles:", f"{start:g}–{end:g} s")
     st.write("Frecuencia de muestreo:", f"{metadata.get('fs', 'No disponible')} Hz")
@@ -142,4 +203,5 @@ with st.expander("Detalles del análisis"):
     st.json(metadata.get("config", config), expanded=False)
     st.caption("La selección de ventana muestra resultados ya calculados; no vuelve a filtrar la señal.")
 
-st.caption("Prototipo académico de revisión retrospectiva. Pendientes: trazado EEG y espectrograma. No realiza diagnóstico automático.")
+st.caption("Prototipo académico de revisión retrospectiva. Incluye anotaciones oficiales; no realiza detección ni diagnóstico automático.")
+
