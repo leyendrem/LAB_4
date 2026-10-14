@@ -8,9 +8,14 @@ import streamlit as st
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "src"))
-from eeg_epilepsy.visualization import METRICS, trend_figure
-
 st.set_page_config(page_title="Revisión de EEG", page_icon="🧠", layout="wide")
+try:
+    from eeg_epilepsy.visualization import METRICS, trend_figure, psd_figure, histogram_figure
+except (ModuleNotFoundError, ImportError):
+    st.error("No se encontró la versión necesaria de visualization.py.")
+    st.code(str(ROOT / "src/eeg_epilepsy/visualization.py"))
+    st.info("Copia el archivo visualization.py actualizado en esa ubicación y reinicia Streamlit.")
+    st.stop()
 
 
 @st.cache_data(show_spinner=False)
@@ -22,19 +27,24 @@ def load_results(root: str, versions: tuple):
     metrics = pd.read_csv(derived / "metricas.csv")
     events = pd.read_csv(derived / "events.csv", encoding="utf-8-sig")
     provenance = json.loads((derived / "configuracion_y_trazabilidad.json").read_text())
-    return metrics, events, config, provenance.get("metadata", {})
+    psd_path = derived / "psd_mediana_por_estado.csv"
+    psd = pd.read_csv(psd_path) if psd_path.exists() else pd.DataFrame()
+    return metrics, events, config, provenance.get("metadata", {}), psd
 
 
 st.title("Revisión de EEG")
-st.caption("Exploración retrospectiva · Tendencias por derivación")
+st.caption("Versión 0.2 · Tendencias, PSD e histogramas")
 try:
     config_path = ROOT / "config/analysis_config.json"
     config = json.loads(config_path.read_text())
     derived = ROOT / config["data"]["derived_dir"]
     files = [config_path, derived / "metricas.csv", derived / "events.csv",
              derived / "configuracion_y_trazabilidad.json"]
+    psd_path = derived / "psd_mediana_por_estado.csv"
+    if psd_path.exists():
+        files.append(psd_path)
     versions = tuple((str(p), p.stat().st_mtime_ns, p.stat().st_size) for p in files)
-    metrics, events, config, metadata = load_results(str(ROOT), versions)
+    metrics, events, config, metadata, psd = load_results(str(ROOT), versions)
     required = {"session", "channel", "window_s", "start_s", "end_s", "state", "quality_flag"}
     if not required.issubset(metrics.columns) or metrics.empty:
         raise ValueError("La tabla de métricas está vacía o incompleta.")
@@ -83,20 +93,47 @@ else:
     periods = "; ".join(f"{r.start_s:g}–{r.end_s:g} s" for r in visible_events.itertuples())
     st.info(f"Crisis según anotaciones del registro: {periods}.")
 
-fig = trend_figure(selected, session_events, channel, window, metric, interval, exclude)
-st.plotly_chart(fig, width="stretch", key="trend")
-EXPLANATIONS = {
-    "rms_uv": "Resume la amplitud de la señal respecto a su media en cada ventana.",
-    "ll_uv_per_sample": "Resume cuánto cambia la amplitud entre muestras consecutivas. Depende de la frecuencia de muestreo.",
-    "entropy": "Describe cómo se distribuye la potencia entre frecuencias: valores altos indican una distribución más uniforme.",
-    "power_uv2": "Resume la potencia espectral entre 0.5 y 40 Hz.",
-}
-description = EXPLANATIONS.get(metric, "Describe la potencia en la banda seleccionada.")
-if metric.endswith("_rel"):
-    description = "Porcentaje de la potencia de 0.5–40 Hz que corresponde a la banda seleccionada."
-st.caption(description + " Los cambios requieren revisión del trazado EEG y del contexto clínico.")
-if flagged.any():
-    st.warning("Las banderas automáticas orientan la revisión; no confirman artefactos. Ocultarlas puede excluir actividad relevante.")
+trend_tab, psd_tab, hist_tab = st.tabs(["Evolución temporal", "Comparación espectral", "Distribución de indicadores"])
+with trend_tab:
+    fig = trend_figure(selected, session_events, channel, window, metric, interval, exclude)
+    st.plotly_chart(fig, width="stretch", key="trend")
+    EXPLANATIONS = {
+        "rms_uv": "Resume la amplitud de la señal respecto a su media en cada ventana.",
+        "ll_uv_per_sample": "Resume cuánto cambia la amplitud entre muestras consecutivas. Depende de la frecuencia de muestreo.",
+        "entropy": "Describe cómo se distribuye la potencia entre frecuencias: valores altos indican una distribución más uniforme.",
+        "power_uv2": "Resume la potencia espectral entre 0.5 y 40 Hz.",
+    }
+    description = EXPLANATIONS.get(metric, "Describe la potencia en la banda seleccionada.")
+    if metric.endswith("_rel"):
+        description = "Porcentaje de la potencia de 0.5–40 Hz que corresponde a la banda seleccionada."
+    st.caption(description + " Los cambios requieren revisión del trazado EEG y del contexto clínico.")
+    if flagged.any():
+        st.warning("Las banderas automáticas orientan la revisión; no confirman artefactos. Ocultarlas puede excluir actividad relevante.")
+
+with psd_tab:
+    st.subheader("¿Cómo cambia la potencia entre frecuencias?")
+    analysis_range = metadata.get("analysis_window_s", [start, end])
+    st.info(f"Vista global del análisis: {analysis_range[0]:g}–{analysis_range[1]:g} s. "
+            "La PSD guardada incluye ventanas marcadas y no cambia con el intervalo temporal ni con el filtro de calidad.")
+    source_session = Path(str(metadata.get("source", ""))).stem
+    if source_session != str(session):
+        st.warning("La procedencia de la PSD no coincide con el registro seleccionado.")
+    elif psd.empty:
+        st.info("No hay un archivo de PSD exportado. Ejecuta el análisis para generarlo.")
+    else:
+        logarithmic = st.checkbox("Escala logarítmica de potencia", value=True)
+        st.plotly_chart(psd_figure(psd, channel, window, logarithmic), width="stretch", key="psd")
+        st.caption("Curvas medianas por estado; n indica el número de ventanas, no pacientes. Las ventanas de transición se excluyen de esta comparación.")
+        st.caption("El proyecto documenta picos estrechos en 16 y 32 Hz que requieren revisión por posible interferencia. Esta vista no establece su origen.")
+
+with hist_tab:
+    st.subheader("¿Cómo se distribuye el indicador en cada estado?")
+    st.caption("Se incluyen solo ventanas completas dentro del intervalo seleccionado. "
+               "Cada estado se normaliza a 100% para comparar distribuciones de distinto tamaño. "
+               "Se excluyen ventanas de transición y valores no definidos.")
+    st.plotly_chart(histogram_figure(selected, channel, window, metric, interval, exclude),
+                    width="stretch", key="histogram")
+    st.caption("El solapamiento entre distribuciones y el número de ventanas deben considerarse al interpretar. No se realizan pruebas de significancia ni clasificación diagnóstica.")
 
 with st.expander("Detalles del análisis"):
     st.write("Intervalo con métricas disponibles:", f"{start:g}–{end:g} s")
@@ -105,4 +142,4 @@ with st.expander("Detalles del análisis"):
     st.json(metadata.get("config", config), expanded=False)
     st.caption("La selección de ventana muestra resultados ya calculados; no vuelve a filtrar la señal.")
 
-st.caption("Prototipo académico de revisión retrospectiva. Esta primera pantalla no incorpora aún trazado EEG, espectrograma ni diagnóstico automático.")
+st.caption("Prototipo académico de revisión retrospectiva. Pendientes: trazado EEG y espectrograma. No realiza diagnóstico automático.")
