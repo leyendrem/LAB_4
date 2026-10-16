@@ -1,11 +1,11 @@
-from pathlib import Path
-from collections import Counter
 import csv
 import json
 import re
+from collections import Counter
+from itertools import pairwise
+from pathlib import Path
 
 import mne
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
@@ -22,13 +22,8 @@ def read_original_header(path):
         if len(fixed_header) != 256:
             raise ValueError("La cabecera EDF está incompleta.")
 
-        number_channels = int(
-            fixed_header[252:256].decode("ascii")
-        )
-        record_duration_s = float(
-            fixed_header[244:252].decode("ascii")
-        )
-
+        number_channels = int(fixed_header[252:256].decode("ascii"))
+        record_duration_s = float(fixed_header[244:252].decode("ascii"))
         signal_header = file.read(256 * number_channels)
 
     if number_channels <= 0:
@@ -71,7 +66,6 @@ def read_original_header(path):
 
     for index in range(number_channels):
         samples = int(samples_per_record[index])
-
         p_min = float(physical_min[index])
         p_max = float(physical_max[index])
         d_min = int(digital_min[index])
@@ -161,10 +155,7 @@ def read_events(summary_path, filename, duration):
         )
     ]
 
-    if (
-        len(starts) != len(ends)
-        or len(starts) != expected_count
-    ):
+    if len(starts) != len(ends) or len(starts) != expected_count:
         raise ValueError(
             "El número de anotaciones no coincide con el resumen."
         )
@@ -177,9 +168,7 @@ def read_events(summary_path, filename, duration):
                 f"Intervalo fuera del registro: {start}–{end} s"
             )
 
-    for previous, current in zip(
-        intervals, intervals[1:]
-    ):
+    for previous, current in pairwise(intervals):
         if current[0] < previous[1]:
             raise ValueError(
                 "Hay anotaciones de crisis solapadas."
@@ -204,10 +193,7 @@ def write_csv(path, rows, columns):
         newline="",
         encoding="utf-8-sig",
     ) as file:
-        writer = csv.DictWriter(
-            file,
-            fieldnames=columns,
-        )
+        writer = csv.DictWriter(file, fieldnames=columns)
         writer.writeheader()
         writer.writerows(rows)
 
@@ -276,21 +262,18 @@ def main():
             if dummy:
                 decision = "excluir"
                 reason = "Canal ficticio o sin nombre"
-
             elif not eeg_candidate:
                 decision = "revisar"
                 reason = (
                     "Nombre no reconocido como "
                     "derivación EEG bipolar"
                 )
-
             elif repeated:
                 decision = "revisar"
                 reason = (
                     "Nombre repetido: comprobar "
                     "equivalencia de señales"
                 )
-
             else:
                 decision = "candidato"
                 reason = (
@@ -331,17 +314,11 @@ def main():
             "original_units": sorted(set(original_units)),
             "nominal_256_hz_matches": bool(fs == 256),
             "all_header_channels_256_hz": bool(
-                all(
-                    row["fs_hz"] == 256
-                    for row in acquisition
-                )
+                all(row["fs_hz"] == 256 for row in acquisition)
             ),
             "n_annotated_seizures": len(events),
             "annotated_ictal_duration_s": float(
-                sum(
-                    event["duration_s"]
-                    for event in events
-                )
+                sum(event["duration_s"] for event in events)
             ),
             "dummy_channel_count": sum(
                 row["dummy"] for row in channels
@@ -361,9 +338,7 @@ def main():
             }),
             "analysis_start_s": 2876,
             "analysis_end_s": 3156,
-            "analysis_range_inside_record": bool(
-                duration >= 3156
-            ),
+            "analysis_range_inside_record": bool(duration >= 3156),
             "channel_review_complete": False,
         }
 

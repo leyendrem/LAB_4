@@ -15,7 +15,7 @@ import hashlib
 import json
 import platform
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from importlib import metadata
 from pathlib import Path
 
@@ -384,7 +384,7 @@ def _analyze(raw, meta, edf_path, summary_path, cfg, durations_s, minimum_channe
             "summary_file": summary_path.name,
             "summary_sha256": summ_sha,
             "summary_download": _manifest_entry(manifest_path, summary_path.name, summ_sha),
-            "analysis_timestamp_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "analysis_timestamp_utc": datetime.now(UTC).isoformat(timespec="seconds"),
             "software_versions": _versions(),
         },
     })
@@ -463,8 +463,8 @@ def descriptive_summary(metrics: pd.DataFrame, exclude_flagged: bool = False) ->
                 float(values.quantile(0.75) - values.quantile(0.25)) if len(values) else np.nan
             )
         n_flagged = int(flags.loc[d.index].sum())
-        row["n_epochs"] = int(len(used))
-        row["n_epochs_total"] = int(len(d))
+        row["n_epochs"] = len(used)
+        row["n_epochs_total"] = len(d)
         row["n_flagged"] = n_flagged
         row["quality_flag_percent"] = float(100 * n_flagged / len(d)) if len(d) else np.nan
         row["excluded_flagged"] = bool(exclude_flagged)

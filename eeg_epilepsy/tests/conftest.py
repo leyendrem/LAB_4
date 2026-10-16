@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent))
-from edf_writer import write_edf  # noqa: E402
+from edf_writer import write_edf
 
 FS = 256
 SEIZURE = (60.0, 80.0)

@@ -1,15 +1,14 @@
-from pathlib import Path
-from urllib.request import urlopen
 import hashlib
 import json
 import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from pathlib import Path
+from urllib.request import urlopen
 
 # Localiza el proyecto independientemente de dónde ejecutes el comando.
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DATA_DIR = PROJECT_ROOT / "data" / "raw"
 
-#BASE_URL = "https://physionet.org/content/chbmit/1.0.0/"
 BASE_URL = "https://physionet.org/files/chbmit/1.0.0/chb01/"
 FILES = [
     "chb01_03.edf",
@@ -41,19 +40,23 @@ def download_data():
     for filename in FILES:
         destination = DATA_DIR / filename
         url = BASE_URL + filename
+        downloaded_now = False
 
         if destination.exists() and destination.stat().st_size > 0:
             print(f"Ya existe: {filename}")
         else:
             print(f"Descargando: {filename}")
+            downloaded_now = True
 
             # Un archivo incompleto no se confunde con una descarga terminada.
             temporary = destination.with_suffix(destination.suffix + ".part")
 
             try:
-                with urlopen(url, timeout=120) as response:
-                    with temporary.open("wb") as output:
-                        shutil.copyfileobj(response, output)
+                with (
+                    urlopen(url, timeout=120) as response,
+                    temporary.open("wb") as output,
+                ):
+                    shutil.copyfileobj(response, output)
 
                 if temporary.stat().st_size == 0:
                     raise ValueError(f"La descarga está vacía: {filename}")
@@ -62,13 +65,6 @@ def download_data():
 
             finally:
                 temporary.unlink(missing_ok=True)
-
-            manifest[filename] = {
-                "dataset": "CHB-MIT Scalp EEG Database",
-                "version": "1.0.0",
-                "url": url,
-                "downloaded_at_utc": datetime.now(timezone.utc).isoformat(),
-            }
 
         current_hash = sha256_file(destination)
         previous = manifest.get(filename, {})
@@ -84,8 +80,8 @@ def download_data():
             "dataset": "CHB-MIT Scalp EEG Database",
             "version": "1.0.0",
             "url": url,
-            # Si ya existía sin manifiesto, su fecha de descarga es desconocida.
-            "downloaded_at_utc": previous.get("downloaded_at_utc"),
+            "downloaded_at_utc": previous.get("downloaded_at_utc")
+            or (datetime.now(UTC).isoformat() if downloaded_now else None),
             "relative_path": destination.relative_to(PROJECT_ROOT).as_posix(),
             "size_bytes": destination.stat().st_size,
             "sha256": current_hash,
