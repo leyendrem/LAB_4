@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "src"))
 st.set_page_config(page_title="Revisión de EEG", page_icon="🧠", layout="wide")
 try:
-    from eeg_epilepsy.visualization import METRICS, trend_figure, psd_figure, histogram_figure, histogram_summary, signal_figure, spectrogram_figure
+    from eeg_epilepsy.visualization import METRICS, trend_figure, psd_figure, histogram_figure, histogram_summary, signal_figure, spectrogram_figure, electrode_map_figure
 except (ModuleNotFoundError, ImportError):
     st.error("No se encontró la versión necesaria de visualization.py.")
     st.code(str(ROOT / "src/eeg_epilepsy/visualization.py"))
@@ -93,7 +93,13 @@ else:
     periods = "; ".join(f"{r.start_s:g}–{r.end_s:g} s" for r in visible_events.itertuples())
     st.info(f"Crisis según anotaciones del registro: {periods}.")
 
-trend_tab, psd_tab, hist_tab, detail_tab = st.tabs(["Evolución temporal", "Comparación espectral", "Distribución de indicadores", "Detalle EEG"])
+trend_tab, psd_tab, hist_tab, detail_tab, map_tab = st.tabs([
+    "Evolución temporal",
+    "Comparación espectral",
+    "Distribución de indicadores",
+    "Detalle EEG",
+    "Ubicación de derivaciones",
+])
 with trend_tab:
     fig = trend_figure(selected, session_events, channel, window, metric, interval, exclude)
     st.plotly_chart(fig, width="stretch", key="trend")
@@ -206,6 +212,37 @@ with detail_tab:
         except (OSError, ValueError, KeyError, ImportError) as error:
             st.error(f"No se pudo mostrar el EEG: {error}")
 
+# Quinta pestaña: representación de la derivación seleccionada.
+with map_tab:
+    st.subheader("Ubicación de derivaciones EEG")
+    st.write(f"**Derivación seleccionada:** {channel}")
+    st.caption(
+        "La línea roja conecta las posiciones de los dos electrodos "
+        "de la derivación bipolar seleccionada."
+    )
+
+    image_path = ROOT / "assets" / "eeg_10_20.png"
+    if not image_path.is_file():
+        st.error("No se encontró assets/eeg_10_20.png. Revisa la ruta de la imagen.")
+    else:
+        try:
+            image, found = electrode_map_figure(channel, image_path)
+            left, center, right = st.columns([1, 2, 1])
+            with center:
+                st.image(image, caption=f"Derivación: {channel}", width="stretch")
+            if not found:
+                st.warning(
+                    "No se pueden ubicar ambos electrodos en este esquema. "
+                    "Por ejemplo, FT9 y FT10 no aparecen en la imagen original."
+                )
+            st.caption(
+                "Referencia visual del sistema 10-20: T3 equivale a T7; "
+                "T4 a T8; T5 a P7; T6 a P8. "
+                "La ubicación es aproximada y no representa el origen de una crisis."
+            )
+        except (OSError, ValueError, ImportError) as error:
+            st.error(f"No se pudo mostrar el mapa EEG: {error}")
+
 with st.expander("Detalles del análisis"):
     st.write("Intervalo con métricas disponibles:", f"{start:g}–{end:g} s")
     st.write("Frecuencia de muestreo:", f"{metadata.get('fs', 'No disponible')} Hz")
@@ -213,4 +250,4 @@ with st.expander("Detalles del análisis"):
     st.json(metadata.get("config", config), expanded=False)
     st.caption("La selección de ventana muestra resultados ya calculados; no vuelve a filtrar la señal.")
 
-st.caption("Prototipo académico de revisión retrospectiva. Incluye anotaciones oficiales; no realiza detección ni diagnóstico automático.")
+st.caption("Prototipo académico de revisión retrospectiva. No constituye una herramienta de diagnóstico clínico.")
