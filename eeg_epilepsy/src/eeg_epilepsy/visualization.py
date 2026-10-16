@@ -53,13 +53,51 @@ def psd_figure(psd: pd.DataFrame, channel: str, window_s: float,
             hovertemplate="%{x:.1f} Hz<br>%{y:.3g} µV²/Hz<extra>%{fullData.name}</extra>",
         ))
     fig.update_layout(template="plotly_white", title=f"Distribución espectral · {channel}",
-                      xaxis_title="Frecuencia (Hz)", yaxis_title="PSD mediana (µV²/Hz)",
+                      xaxis_title="Frecuencia (Hz)", yaxis_title="PSD mediana (µV²/Hz) · escala " + ("logarítmica" if logarithmic else "lineal"),
                       legend=dict(orientation="h", y=-0.25))
     fig.update_yaxes(type="log" if logarithmic else "linear")
     if not fig.data:
         fig.add_annotation(text="No hay espectros para esta selección.", x=0.5, y=0.5,
                            xref="paper", yref="paper", showarrow=False)
     return fig
+
+
+def _histogram_rows(metrics: pd.DataFrame, channel: str, window_s: float,
+                    metric: str, time_range: tuple[float, float],
+                    exclude_flagged: bool = False) -> pd.DataFrame:
+    """Selección común para la distribución y su resumen numérico."""
+    if metrics.session.nunique() > 1:
+        raise ValueError("Selecciona una sola sesión antes de graficar.")
+    METRICS[metric]  # Valida el indicador solicitado.
+    rows = metrics.loc[(metrics.channel == channel) & (metrics.window_s == window_s)
+                       & (metrics.start_s >= time_range[0]) & (metrics.end_s <= time_range[1])
+                       & metrics.state.isin(STATE_COLORS)].copy()
+    if exclude_flagged:
+        rows = rows.loc[~rows.quality_flag.astype(str).str.lower().isin(["true", "1"])]
+    rows[metric] = pd.to_numeric(rows[metric], errors="coerce")
+    rows = rows.loc[np.isfinite(rows[metric])].copy()
+    if metric.endswith("_rel"):
+        rows[metric] *= 100
+    return rows
+
+
+def histogram_summary(metrics: pd.DataFrame, channel: str, window_s: float,
+                      metric: str, time_range: tuple[float, float],
+                      exclude_flagged: bool = False) -> pd.DataFrame:
+    """Cuartiles de las mismas ventanas y unidades mostradas en el histograma."""
+    rows = _histogram_rows(metrics, channel, window_s, metric, time_range, exclude_flagged)
+    unit = METRICS[metric][1]
+    ric_unit = "puntos porcentuales" if metric.endswith("_rel") else unit
+    columns = ["Estado", "Ventanas (n)", f"Mediana ({unit})", f"Q1 ({unit})",
+               f"Q3 ({unit})", f"RIC ({ric_unit})"]
+    records = []
+    for state in STATE_COLORS:
+        values = rows.loc[rows.state == state, metric]
+        if values.empty:
+            continue
+        q1, median, q3 = values.quantile([0.25, 0.5, 0.75])
+        records.append([STATES[state], len(values), median, q1, q3, q3 - q1])
+    return pd.DataFrame(records, columns=columns)
 
 
 def histogram_figure(metrics: pd.DataFrame, channel: str, window_s: float,
@@ -70,20 +108,10 @@ def histogram_figure(metrics: pd.DataFrame, channel: str, window_s: float,
     Incluye solo ventanas completas dentro del intervalo. Excluye transición,
     valores no finitos y, opcionalmente, ventanas marcadas por calidad.
     """
-    if metrics.session.nunique() > 1:
-        raise ValueError("Selecciona una sola sesión antes de graficar.")
     if bins < 1:
         raise ValueError("El número de intervalos debe ser positivo.")
     title, unit = METRICS[metric]
-    rows = metrics.loc[(metrics.channel == channel) & (metrics.window_s == window_s)
-                       & (metrics.start_s >= time_range[0]) & (metrics.end_s <= time_range[1])
-                       & metrics.state.isin(STATE_COLORS)].copy()
-    if exclude_flagged:
-        rows = rows.loc[~rows.quality_flag.astype(str).str.lower().isin(["true", "1"])]
-    rows[metric] = pd.to_numeric(rows[metric], errors="coerce")
-    rows = rows.loc[np.isfinite(rows[metric])].copy()
-    if metric.endswith("_rel"):
-        rows[metric] *= 100
+    rows = _histogram_rows(metrics, channel, window_s, metric, time_range, exclude_flagged)
     fig = go.Figure()
     if not rows.empty:
         edges = np.histogram_bin_edges(rows[metric], bins=bins)
@@ -103,7 +131,7 @@ def histogram_figure(metrics: pd.DataFrame, channel: str, window_s: float,
     else:
         fig.add_annotation(text="No hay ventanas completas comparables en este intervalo.",
                            x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False)
-    fig.update_layout(template="plotly_white", title=f"Distribución de {title.lower()}",
+    fig.update_layout(template="plotly_white", title=f"{title} · Derivación {channel} · Ventana de {window_s:g} s",
                       xaxis_title=f"{title} ({unit})", yaxis_title="Ventanas de cada estado (%)",
                       barmode="overlay", legend=dict(orientation="h", y=-0.25))
     return fig
