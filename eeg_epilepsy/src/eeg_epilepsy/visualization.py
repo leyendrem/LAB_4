@@ -294,3 +294,69 @@ def spectrogram_figure(x_uv, fs: float, start_s: float, channel: str,
                       xaxis_title="Tiempo desde el inicio del registro (s)",
                       yaxis_title="Frecuencia (Hz)")
     return fig
+
+
+def electrode_map_figure(channel, image_path):
+    """Resalta una derivación sobre el esquema EEG 10-20."""
+
+    from PIL import Image, ImageDraw
+
+    img = Image.open(image_path).convert("RGB")
+    draw = ImageDraw.Draw(img)
+
+    # Coordenadas de los electrodos en la imagen 600 x 599
+    coords = {
+        "FP1": (228, 114), "FP2": (358, 114),
+        "F7": (132, 197), "F3": (217, 215),
+        "FZ": (294, 195), "F4": (373, 215),
+        "F8": (453, 198),
+        "T7": (104, 316), "C3": (199, 315),
+        "CZ": (294, 316), "C4": (390, 314),
+        "T8": (485, 314),
+        "P7": (132, 432), "P3": (215, 416),
+        "PZ": (294, 434), "P4": (372, 418),
+        "P8": (454, 431),
+        "O1": (231, 538), "O2": (358, 538)
+    }
+
+    # Eliminar sufijos de canales duplicados
+    name = channel.upper()
+    if name.endswith(("-0", "-1")):
+        name = name[:-2]
+
+    parts = name.split("-")
+
+    if len(parts) != 2:
+        return img, False
+
+    ch1, ch2 = parts
+
+    if ch1 not in coords or ch2 not in coords:
+        return img, False
+
+    # Ajustar coordenadas al tamaño de la imagen
+    sx = img.width / 600
+    sy = img.height / 599
+
+    x1, y1 = coords[ch1]
+    x2, y2 = coords[ch2]
+
+    p1 = (round(x1 * sx), round(y1 * sy))
+    p2 = (round(x2 * sx), round(y2 * sy))
+
+    width = max(2, round(5 * min(sx, sy)))
+    radius = max(5, round(21 * min(sx, sy)))
+
+    # Dibujar conexión en rojo
+    draw.line([p1, p2], fill="red", width=width)
+
+    # Resaltar electrodos
+    for x, y in [p1, p2]:
+        draw.ellipse(
+            (x-radius, y-radius, x+radius, y+radius),
+            outline="red",
+            width=width
+        )
+
+    return img, True
+
