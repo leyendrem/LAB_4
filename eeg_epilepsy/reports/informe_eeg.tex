@@ -1,304 +1,264 @@
-\usepackage{amsmath}
-\usepackage{graphicx}
-\usepackage{booktabs}
-\usepackage{tabularx}
+\documentclass[11pt,a4paper]{article}
+\usepackage[spanish,es-nodecimaldot]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=2.1cm]{geometry}
+\usepackage{amsmath,amssymb,graphicx,booktabs,tabularx,longtable,array}
 \usepackage{tikz}
-\usetikzlibrary{arrows.meta,positioning}
+\usetikzlibrary{arrows.meta,positioning,fit,shapes.geometric}
+\usepackage{xcolor}
 \usepackage{hyperref}
-\section{Solicitud clínica y alcance}
+\usepackage{enumitem}
+\hypersetup{colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black}
+\setlength{\parskip}{4pt}
+\setlength{\parindent}{0pt}
+\title{Revisión retrospectiva de EEG y crisis epilépticas\\\large Informe técnico del dashboard}
+\author{Equipo de laboratorio -- Señales Bioeléctricas y Visualización Interactiva}
+\date{\today}
+\begin{document}
+\maketitle
+\begin{abstract}
+Este informe documenta la problemática clínica simulada, la auditoría de datos, el pipeline de procesamiento y el diseño de la interfaz del proyecto LAB04\_EEGDashboard. Se describe el código existente sin modificar sus funciones. El prototipo facilita la exploración retrospectiva de un registro EEG, la comparación descriptiva de ventanas con crisis anotada y sin crisis anotada, la inspección de indicadores y la revisión de calidad. No es un sistema de diagnóstico, predicción de crisis ni localización de un foco causal.
+\end{abstract}
+\tableofcontents
+\newpage
 
-El proyecto responde a la necesidad de revisar registros EEG
-prolongados y describir cambios de amplitud, actividad rítmica
-y distribución espectral alrededor de crisis anotadas.
-El dashboard permite navegar el trazado, revisar su calidad
-y comparar segmentos ictales con segmentos sin crisis anotada.
+\section{Problemática y solicitud clínica}
+La guía del laboratorio plantea la solicitud de un neurólogo de una unidad de monitorización de epilepsia que necesita revisar registros EEG prolongados de pacientes con epilepsia farmacorresistente. Requiere navegar el trazado, examinar la calidad y observar cambios de amplitud, actividad rítmica y distribución espectral alrededor de crisis anotadas. También solicita conservar las anotaciones originales y comparar segmentos ictales con segmentos sin crisis anotada, explicando para cada indicador su fundamento fisiológico, unidades, parámetros y limitaciones.
 
-El sistema constituye un prototipo de revisión retrospectiva.
-No demuestra diagnóstico, predicción de crisis, localización
-de un foco causal ni respuesta terapéutica. Un segmento sin
-crisis anotada no representa un control sano.
+La pregunta de ingeniería que guía el dashboard es: \textbf{¿qué cambios cuantificables acompañan a las crisis anotadas y cuáles pueden confundirse con artefactos o variaciones fisiológicas?}
 
-\section{Fundamento fisiológico}
+\subsection{Alcance y exclusiones}
+El sistema es un prototipo de revisión retrospectiva y análisis descriptivo. No diagnostica epilepsia, no predice crisis, no localiza un foco causal ni evalúa respuesta terapéutica. Un intervalo sin crisis anotada no equivale a un control sano. Las etiquetas provienen del resumen oficial del registro; las métricas no sustituyen la revisión clínica.
 
-El EEG de superficie refleja principalmente la suma espacial
-y temporal de corrientes postsinápticas de poblaciones
-corticales con geometría favorable. La orientación neuronal,
-la coordinación temporal y la conducción de volumen
-influyen en los potenciales registrados. El EEG no representa
-directamente la descarga de una sola neurona.
+\section{Fisiología del EEG y traducción a indicadores}
+El EEG de superficie refleja principalmente la suma espacial y temporal de corrientes postsinápticas de poblaciones corticales con geometría favorable. No registra directamente la descarga de una neurona individual. La conducción de volumen, el montaje bipolar y fuentes extracerebrales afectan la señal observada.
 
-Las derivaciones del registro son bipolares: cada canal
-representa una diferencia de potencial entre dos electrodos.
-Por ejemplo:
+En un canal bipolar, por ejemplo, \(
+V_{\mathrm{FP1-F7}}=V_{\mathrm{FP1}}-V_{\mathrm{F7}}
+\). La señal es una diferencia entre electrodos, no el potencial absoluto de un electrodo. La similitud entre canales con electrodos compartidos no demuestra conectividad neuronal y no debe construirse una topografía de potenciales a partir de estas diferencias como si fueran referencias comunes.
 
-\[
-V_{\mathrm{FP1-F7}} = V_{\mathrm{FP1}}-V_{\mathrm{F7}}.
-\]
+Durante una crisis pueden aparecer patrones rítmicos evolutivos y cambios de amplitud o espectro, pero no todas las crisis comparten el mismo patrón ni todas las métricas aumentan. El movimiento y los parpadeos pueden elevar componentes lentas; la actividad muscular puede aumentar amplitud, longitud de línea y potencia rápida. Por ello, ningún indicador o banda aislada confirma una crisis.
 
-La amplitud y polaridad dependen de ambos electrodos.
-Una diferencia pequeña no demuestra ausencia de actividad.
-La similitud entre canales con electrodos compartidos tampoco
-demuestra conectividad neuronal. No se construyen directamente
-topografías de potenciales de electrodos a partir de estas
-diferencias bipolares.
+\begin{longtable}{p{0.20\linewidth}p{0.28\linewidth}p{0.18\linewidth}p{0.25\linewidth}}
+\caption{Necesidad de revisión e interpretación de indicadores.}\\
+\toprule
+\textbf{Indicador} & \textbf{Qué describe} & \textbf{Unidad} & \textbf{Límite}\\
+\midrule
+\endfirsthead
+\toprule \textbf{Indicador} & \textbf{Qué describe} & \textbf{Unidad} & \textbf{Límite}\\ \midrule
+\endhead
+RMS centrado & Amplitud respecto a la media de la época. & $\mu$V & Depende del montaje y de artefactos.\\
+Longitud de línea media & Variación absoluta entre muestras consecutivas. & $\mu$V/muestra & Depende de muestreo y filtrado; no es velocidad.\\
+Potencia absoluta por banda & Energía espectral integrada en un rango. & $\mu$V$^2$ & Una banda aislada no es diagnóstico.\\
+Potencia relativa & Proporción de potencia de banda frente a 0.5--40 Hz. & Fracción & Puede aumentar aunque la potencia absoluta disminuya.\\
+Entropía espectral normalizada & Uniformidad de la distribución de potencia. & Adimensional & Puede subir o bajar; depende de bins y rango.\\
+Fracción ictal / solapamiento & Porción de una época cubierta por anotaciones oficiales. & s y fracción & No es detección automática.\\
+Banderas de calidad & Señalan ventanas que requieren revisión. & Booleano / etiqueta & No confirman artefacto por sí solas.\\
+\bottomrule
+\end{longtable}
 
-Durante una crisis pueden aparecer cambios de amplitud,
-patrones rítmicos y redistribución espectral. Sin embargo,
-el movimiento y los parpadeos pueden aumentar componentes
-lentas, mientras que la actividad muscular puede aumentar
-amplitud, longitud de línea y potencia rápida. Los indicadores
-deben interpretarse junto con el trazado y la calidad.
+Se usan bandas operativas delta 0.5--4 Hz, theta 4--8 Hz, alfa 8--13 Hz y beta 13--30 Hz. El denominador de potencia relativa es 0.5--40 Hz; la banda 30--40 Hz no debe etiquetarse como toda la banda gamma. Si la potencia total es nula, la potencia relativa y la entropía no están definidas y deben quedar ausentes, no sustituirse por cero.
 
-\section{Datos y adquisición}
+\section{Datos, adquisición y trazabilidad}
+El proyecto usa CHB-MIT Scalp EEG Database, versión 1.0.0, de PhysioNet, con licencia Open Data Commons Attribution License v1.0. El registro núcleo es \texttt{chb01\_03.edf} y las anotaciones proceden de \texttt{chb01-summary.txt}. La guía indica verificar la cabecera de cada archivo, conservar la referencia temporal desde el inicio del EDF y no concatenar registros separados como si no hubiera discontinuidades.
 
-Se utilizó CHB-MIT Scalp EEG Database, versión 1.0.0,
-publicada en PhysioNet bajo Open Data Commons Attribution
-License v1.0. Se descargaron el registro
-\texttt{chb01\_03.edf} y el resumen oficial
-\texttt{chb01-summary.txt}.
-
-\begin{table}[htbp]
-\centering
-\caption{Características verificadas del registro.}
+\begin{table}[htbp]\centering
+\caption{Datos del registro auditado y configuración de análisis.}
 \begin{tabular}{ll}
 \toprule
-Característica & Resultado \\
-\midrule
-Frecuencia por canal & 256 Hz \\
-Duración & 3600 s \\
-Muestras por canal & 921\,600 \\
-Canales almacenados & 23 \\
-Unidad física declarada & $\mu$V \\
-Crisis anotadas & 1 \\
-Inicio y final & 2996--3036 s \\
-Duración de la crisis & 40 s \\
-Intervalo de revisión & 2876--3156 s \\
+Registro & \texttt{chb01\_03.edf}\\
+Frecuencia verificada & 256 Hz\\
+Duración verificada & 3600 s\\
+Muestras por canal & 921\,600\\
+Canales almacenados & 23\\
+Crisis anotada & 2996--3036 s (40 s)\\
+Ventana de análisis por defecto & 2876--3156 s\\
+Filtro propuesto & Butterworth, orden 4, 0.5--40 Hz\\
+Método de filtrado & \texttt{sosfiltfilt}, retrospectivo y no causal\\
+Épocas & 2, 4 y 8 s; avance igual a la mitad de la duración\\
+Welch & Hann, segmento de 2 s, solapamiento 50\%, bins de 0.5 Hz\\
 \bottomrule
 \end{tabular}
 \end{table}
 
-La crisis y el intervalo de revisión están dentro de la duración
-del registro. Todos los tiempos se conservan en segundos desde
-el inicio del EDF. Las fechas del EDF fueron sustituidas para
-proteger la privacidad y no se interpretan como fechas clínicas.
+La auditoría del proyecto documenta 23 derivaciones y dos redundancias: \texttt{T8-P8-0} y \texttt{T8-P8-1} son idénticas, y \texttt{P7-T7} es redundante con polaridad invertida y desplazamiento constante respecto a \texttt{T7-P7}. Se conserva el EDF original; la selección de canales excluye estas duplicaciones del análisis, no declara mala calidad global. MNE entrega los datos en voltios y el pipeline convierte a microvoltios una sola vez.
 
-\subsection{Cadena de adquisición}
+La cabecera declara límites físicos de $\pm800\,\mu$V y digitales de $-2048$ a $2047$. Estos límites ayudan a revisar saturación, pero la amplitud grande no demuestra por sí sola que haya saturación. La información de prefiltrado no está documentada en la cabecera, lo que no significa que el registro no haya sido filtrado durante la adquisición.
+
+\section{Pipeline: arquitectura y flujo de datos}
+La arquitectura separa adquisición/auditoría, procesamiento científico, persistencia de resultados e interfaz. Los archivos derivados guardan métricas y trazabilidad para que la interfaz pueda visualizar resultados existentes y, cuando se solicita, cargar el EDF para inspección detallada.
 
 \begin{figure}[htbp]
 \centering
+\resizebox{0.96\linewidth}{!}{%
 \begin{tikzpicture}[
-    node distance=6mm,
-    stage/.style={
-        draw,
-        rounded corners,
-        align=center,
-        text width=0.78\linewidth,
-        inner sep=7pt,
-        font=\small
-    },
-    flow/.style={-{Latex[length=2.5mm]},thick}
+  node distance=7mm and 9mm,
+  box/.style={draw,rounded corners,align=center,text width=3.3cm,minimum height=1.05cm,font=\small},
+  file/.style={draw,rounded corners,fill=blue!5,align=center,text width=3.3cm,minimum height=0.9cm,font=\small},
+  arrow/.style={-{Latex[length=2.3mm]},thick}
 ]
-\node[stage] (electrodes) {
-    \textbf{Electrodos}\\
-    Captación de potenciales en el cuero cabelludo.\\
-    Derivaciones bipolares documentadas;
-    impedancia no verificada.
-};
-
-\node[stage,below=of electrodes] (amplifier) {
-    \textbf{Amplificación y acondicionamiento}\\
-    Preparación de la señal analógica.\\
-    Modelo y ganancia no verificados;
-    prefiltrado no informado en la cabecera.
-};
-
-\node[stage,below=of amplifier] (adc) {
-    \textbf{Conversión analógico-digital}\\
-    Frecuencia verificada: 256 Hz.\\
-    Límites digitales declarados: $-2048$ a $2047$.
-};
-
-\node[stage,below=of adc] (edf) {
-    \textbf{Almacenamiento EDF}\\
-    23 canales, 3600 s y unidades $\mu$V.\\
-    Límites físicos declarados: $-800$ a $800\,\mu$V.
-};
-
-\draw[flow] (electrodes) -- (amplifier);
-\draw[flow] (amplifier) -- (adc);
-\draw[flow] (adc) -- (edf);
-\end{tikzpicture}
-\caption{Cadena conceptual de adquisición. Los parámetros
-indicados proceden de la auditoría del EDF; el esquema
-no representa un circuito verificado del hardware original.}
-\label{fig:acquisition}
+\node[box] (download) {\textbf{scripts/download\_data.py}\\Descarga EDF + resumen\\y manifiesto SHA-256};
+\node[box,right=of download] (audit) {\textbf{data/audit.py}\\Cabecera, eventos, límites\\y validación temporal};
+\node[box,below=of audit] (channels) {\textbf{check\_channels.py}\\Compara derivaciones\\y documenta redundancias};
+\node[file,left=of channels] (raw) {\textbf{data/raw/}\\EDF original, resumen\\y manifiesto};
+\node[file,below=of channels] (selection) {\textbf{channel\_selection.json}\\Canales incluidos/excluidos};
+\node[box,right=of channels] (analysis) {\textbf{analysis.py}\\Orquesta lectura, filtro,\\épocas, métricas y resumen};
+\node[box,below=of analysis] (modules) {\textbf{io.py + preprocessing.py}\\segmentation.py + quality.py\\metrics.py};
+\node[file,below=of modules] (derived) {\textbf{data/derived/}\\metricas.csv, eventos, PSD,\\resúmenes y trazabilidad};
+\node[box,right=of analysis] (app) {\textbf{app.py (Streamlit)}\\Controles de registro, canal,\\métrica, ventana y calidad};
+\node[box,below=of app] (viz) {\textbf{visualization.py}\\Tendencias, PSD, histogramas,\\EEG, espectrograma y mapa};
+\node[file,below=of viz] (user) {\textbf{Dashboard interactivo}\\Explorar y exportar evidencia};
+\draw[arrow] (download) -- (raw);
+\draw[arrow] (raw) -- (audit);
+\draw[arrow] (audit) -- (channels);
+\draw[arrow] (channels) -- (selection);
+\draw[arrow] (channels) -- (analysis);
+\draw[arrow] (selection) -- (analysis);
+\draw[arrow] (analysis) -- (modules);
+\draw[arrow] (modules) -- (derived);
+\draw[arrow] (derived) -- (app);
+\draw[arrow] (app) -- (viz);
+\draw[arrow] (viz) -- (user);
+\draw[arrow] (raw.east) to[out=0,in=180] (app.west);
+\end{tikzpicture}}
+\caption{Arquitectura lógica del repositorio. El dashboard lee CSV/JSON derivados; el detalle EEG puede volver a leer el EDF y verificar su hash.}
+\label{fig:architecture}
 \end{figure}
 
-Los 23 canales declaran límites físicos de
-$-800$ a $800\,\mu$V y digitales de $-2048$ a $2047$.
-La escala física declarada es:
+\subsection{Ejecución reproducible}
+Desde la raíz del repositorio, el flujo documentado es:
+\begin{verbatim}
+uv sync
+uv run python scripts/download_data.py
+uv run python scripts/reproduce.py
+uv run python scripts/run_analysis.py
+uv run streamlit run app.py
+uv run pytest
+\end{verbatim}
+La descarga requiere conexión inicial. Los EDF no deben subirse al repositorio. El archivo \texttt{config/analysis\_config.json} es la fuente central de parámetros de análisis.
 
-\[
-q=\frac{800-(-800)}{2047-(-2048)}
-=\frac{1600}{4095}
-\approx 0.390720391\,\mu\mathrm{V/código}.
-\]
+\section{Responsabilidad de cada archivo Python}
+Las descripciones siguientes documentan el papel de los archivos y funciones existentes; no implican que se hayan cambiado sus implementaciones.
 
-La documentación del dataset indica una resolución de
-16 bits. El rango digital declarado contiene 4096 códigos,
-pero no permite determinar por sí solo la resolución
-del ADC original.
+\subsection{Entradas de ejecución}
+\begin{description}[leftmargin=!,labelwidth=4.0cm,style=nextline]
+\item[\texttt{scripts/download\_data.py}] Punto de entrada para descargar el EDF y el resumen oficial mediante el módulo de descarga.
+\item[\texttt{scripts/reproduce.py}] Coordina descarga, auditoría y comparación de canales para reproducir el análisis inicial.
+\item[\texttt{scripts/run\_analysis.py}] Interpreta argumentos de ejecución y llama al análisis, con ventana por defecto o registro completo.
+\item[\texttt{src/eeg\_epilepsy/procesamiento.py}] Pipeline de referencia: lee intervalos oficiales, prepara un canal, conserva el tiempo y genera un ejemplo de métricas/figuras para inspección.
+\item[\texttt{app.py}] Aplicación Streamlit. Carga resultados derivados con caché, valida columnas mínimas, filtra por registro/canal/duración/intervalo y organiza pestañas de tendencias, espectro, distribuciones, detalle EEG y mapa de derivaciones.
+\end{description}
 
-El campo de prefiltrado está vacío: no informa los filtros
-de adquisición y no demuestra su ausencia. Los límites
-de cabecera tampoco demuestran saturación; deben contrastarse
-con las muestras.
-
-MNE entrega las señales EEG en voltios. El código convierte
-una sola vez a microvoltios mediante el factor $10^6$.
-
-\subsection{Trazabilidad}
-
-El manifiesto conserva nombre, versión, URL, fecha de
-descarga, ruta relativa, tamaño y SHA-256 de ambos archivos.
-
-El EDF se descargó el 7 de octubre de 2026 a las
-02:20:28 UTC, con tamaño de 42\,399\,744 bytes.
-El resumen se descargó a las 02:20:29 UTC,
-con tamaño de 5355 bytes. Ambas descargas corresponden
-al 6 de octubre en Colombia.
-
-Las huellas permiten detectar cambios respecto al contenido
-registrado; no se contrastaron con una huella oficial
-independiente.
-
-\subsection{Montaje y redundancias}
-
-Los 23 nombres originales coinciden, en nombre y orden,
-con el montaje del resumen oficial. No se identificaron
-canales ficticios denominados ``-'' ni canales no EEG
-en la lista de este registro.
-
-Se compararon las 921\,600 muestras de los pares
-potencialmente redundantes:
-
-\begin{itemize}
-    \item \texttt{T8-P8-0} y \texttt{T8-P8-1} fueron idénticos,
-    con diferencia máxima y RMSE de $0\,\mu$V.
-    Se conserva \texttt{T8-P8-0}.
-    \item \texttt{T7-P7} y \texttt{P7-T7} presentaron
-    polaridad invertida y desplazamiento constante:
-\end{itemize}
-
-\[
-x_{\mathrm{P7-T7}}
-=-x_{\mathrm{T7-P7}}+0.390720391\,\mu\mathrm{V}.
-\]
-
-La desviación estándar de su suma fue aproximadamente
-$4.67\times10^{-15}\,\mu$V. Se conserva
-\texttt{T7-P7} y se excluye \texttt{P7-T7} por redundancia.
-
-Quedan 21 derivaciones candidatas tras las exclusiones.
-Esta decisión no demuestra buena calidad en todos los canales.
-El EDF original se conserva completo.
-
-\section{Justificación de los indicadores}
-
-\begin{table}[htbp]
-\centering
-\small
-\caption{Relación entre indicadores, necesidad y límites.}
-\begin{tabularx}{\linewidth}{@{}p{0.23\linewidth}XX@{}}
-\toprule
-Indicador & Utilidad & Límite interpretativo \\
-\midrule
-RMS centrado ($\mu$V)
-& Describe amplitud respecto a la media.
-& Depende del montaje y puede aumentar por artefactos. \\
-
-Longitud de línea media ($\mu$V)
-& Describe variación entre muestras consecutivas.
-& Depende del muestreo y filtro; sensible a actividad muscular. \\
-
-Potencia absoluta ($\mu$V$^2$)
-& Describe potencia integrada por banda.
-& Las bandas aisladas no demuestran crisis. \\
-
-Potencia relativa (fracción o \%)
-& Describe proporción de potencia por banda.
-& Depende del denominador; puede aumentar aunque la absoluta disminuya. \\
-
-Entropía espectral (sin unidad)
-& Describe concentración o dispersión espectral.
-& Depende de resolución y ruido; puede subir o bajar durante una crisis. \\
-
-Duración y fracción ictal (s y \%)
-& Cuantifican tiempo cubierto por anotaciones.
-& No representan detección automática. \\
-
-Banderas de calidad
-& Identifican segmentos que requieren revisión.
-& No confirman automáticamente artefactos. \\
+\subsection{Paquete \texttt{src/eeg\_epilepsy}}
+\begin{longtable}{p{0.25\linewidth}p{0.68\linewidth}}
+\caption{Módulos y funciones principales del paquete.}\\
+\toprule \textbf{Archivo} & \textbf{Responsabilidad de funciones}\\ \midrule
+\endfirsthead
+\toprule \textbf{Archivo} & \textbf{Responsabilidad de funciones}\\ \midrule
+\endhead
+\texttt{io.py} &
+\texttt{read\_edf(path)} abre el EDF con MNE y devuelve objeto de señal y metadatos. \texttt{get\_channel\_uv(raw, channel)} obtiene la derivación solicitada y la convierte a microvoltios.\\
+\texttt{preprocessing.py} &
+\texttt{to\_microvolts} normaliza unidades. \texttt{bandpass\_eeg} configura/aplica pasabanda. \texttt{filter\_with\_context} filtra contexto amplio antes de recortar. \texttt{edge\_review} permite revisar efectos de borde. \texttt{preprocess\_channel} integra etapas de preprocesamiento del canal.\\
+\texttt{segmentation.py} &
+La clase \texttt{Epoch} representa límites de una época. \texttt{interval\_overlap} calcula cuánto de una época intersecta anotaciones, sin contar dos veces tramos solapados. \texttt{label\_epoch} asigna estados ictal, transición o sin crisis anotada. \texttt{make\_epochs} genera ventanas según duración y avance. \texttt{epoch\_array} extrae las muestras correspondientes.\\
+\texttt{quality.py} &
+\texttt{epoch\_quality(...)} calcula banderas de calidad para una época a partir de la señal y criterios configurados. Las banderas orientan inspección, no certifican artefactos.\\
+\texttt{metrics.py} &
+\texttt{centered\_rms} calcula RMS centrado; \texttt{line\_length} variación media entre muestras; \texttt{bandpower} integra potencia en banda; \texttt{spectral\_entropy} cuantifica dispersión espectral; \texttt{psd\_features} calcula características de PSD; \texttt{nan\_features} y \texttt{empty\_spectrum} preparan salidas ausentes/vacías; \texttt{epoch\_features} agrupa los indicadores por época.\\
+\texttt{analysis.py} &
+\texttt{load\_config} y \texttt{resolve} cargan parámetros y resuelven rutas. \texttt{sha256\_file}, \texttt{\_versions} y \texttt{\_manifest\_entry} respaldan trazabilidad. \texttt{\_bands}, \texttt{\_union\_length} y \texttt{\_quality\_flag} apoyan el análisis. \texttt{acquisition\_limits} recupera límites de cabecera; \texttt{analysis\_channels} aplica la selección de derivaciones; \texttt{analyze\_file}/\texttt{\_analyze} ejecutan el pipeline por archivo; \texttt{run\_analysis} coordina el procesamiento; \texttt{flag\_series}, \texttt{col} y \texttt{summary\_metric\_columns} preparan columnas; \texttt{descriptive\_summary} resume mediana, RIC, n y porcentaje marcado; \texttt{binary\_subset} selecciona estados binarios excluyendo transiciones; \texttt{psd\_by\_state} resume espectros por estado; \texttt{\_json\_default} adapta tipos para JSON; \texttt{export\_results} escribe las salidas.\\
+\texttt{visualization.py} &
+\texttt{psd\_figure} presenta PSD por estado; \texttt{\_histogram\_rows} prepara datos de histogramas; \texttt{histogram\_summary} resume distribuciones; \texttt{histogram\_figure} dibuja histogramas; \texttt{trend\_figure} crea tendencias con anotaciones y opciones de calidad; \texttt{signal\_figure} compara señal cruda y filtrada; \texttt{spectrogram\_figure} presenta el espectrograma; \texttt{electrode\_map\_figure} ubica visualmente electrodos de una derivación en el esquema disponible.\\
+\texttt{data/download.py} &
+\texttt{sha256\_file} calcula la huella del archivo; \texttt{download\_data} descarga fuentes y registra metadatos de procedencia.\\
+\texttt{data/audit.py} &
+\texttt{read\_original\_header} lee campos de cabecera EDF; \texttt{read\_field} interpreta campos de ancho fijo; \texttt{read\_summary\_block} obtiene el bloque oficial de un archivo; \texttt{read\_events} extrae y valida intervalos de crisis; \texttt{write\_csv} guarda tablas; \texttt{main} ejecuta auditoría desde línea de comandos.\\
+\texttt{data/check\_channels.py} &
+\texttt{compare\_channels} compara señales candidatas a duplicado o redundancia, con opción de polaridad invertida; \texttt{find\_index} encuentra índice del canal original; \texttt{main} coordina comparación y figuras de inspección.\\
+\texttt{data/channel\_selection.py} &
+\texttt{load\_channel\_selection} lee el contrato de selección; \texttt{select\_analysis\_channels} aplica las inclusiones/exclusiones al conjunto de canales.\\
+\texttt{\_\_init\_\_.py} &
+Define \texttt{main()} como punto de entrada del paquete para invocar el flujo configurado.\\
 \bottomrule
-\end{tabularx}
-\end{table}
+\end{longtable}
 
-Se utilizan las bandas delta de 0.5--4 Hz, theta de 4--8 Hz,
-alfa de 8--13 Hz y beta de 13--30 Hz. El denominador de
-potencia relativa comprende 0.5--40 Hz, incluida la potencia
-de 30--40 Hz, que no representa toda la banda gamma.
+\subsection{Configuración, datos y pruebas}
+\texttt{config/analysis\_config.json} contiene la ruta del EDF/resumen, directorio derivado, reglas mínimas de canales, intervalo de análisis, filtro, duraciones de época, parámetros de Welch, bandas y umbrales de calidad. \texttt{pyproject.toml} declara dependencias y herramientas del entorno; \texttt{uv.lock} fija versiones resueltas. \texttt{tests/} contiene pruebas unitarias y de escenarios controlados para análisis, selección de canales, E/S, métricas, calidad y segmentación. \texttt{tests/edf\_writer.py} apoya la creación de EDF sintéticos de prueba. \texttt{assets/eeg\_10\_20.png} es la imagen usada por el mapa; \texttt{docs/qa\_implementation.md} registra el alcance de QA y sus límites.
 
-Una señal de potencia total nula produce potencia relativa
-y entropía indefinidas; deben registrarse como valores ausentes.
-Las ecuaciones y parámetros de cálculo se documentan en
-la sección de métodos del equipo.
+\section{Diseño del dashboard}
+La interfaz está organizada para que las decisiones de navegación sean compartidas y el usuario pueda comparar indicadores sin perder el contexto temporal.
 
-\section{Inspección visual inicial}
+\begin{figure}[htbp]
+\centering
+\resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[
+  node distance=5mm and 6mm,
+  panel/.style={draw,rounded corners,align=center,text width=3.05cm,minimum height=1.2cm,font=\small},
+  ctrl/.style={draw,rounded corners,fill=gray!10,align=center,text width=3.05cm,minimum height=1cm,font=\small},
+  arr/.style={-{Latex[length=2mm]},thick}
+]
+\node[ctrl] (filters) {\textbf{Controles comunes}\\Registro · derivación · indicador\\duración de ventana · intervalo};
+\node[panel,below left=of filters] (trend) {\textbf{Evolución temporal}\\Métrica por época\\anotaciones y filtro de calidad};
+\node[panel,below=of filters] (psd) {\textbf{Comparación espectral}\\PSD mediana por estado\\y aviso de picos sospechosos};
+\node[panel,below right=of filters] (hist) {\textbf{Distribución}\\Histogramas, mediana, RIC\\y número de ventanas};
+\node[panel,below=of trend] (detail) {\textbf{Detalle EEG}\\Trazado crudo/filtrado\\y espectrograma};
+\node[panel,below=of hist] (map) {\textbf{Mapa de derivaciones}\\Ubicación aproximada\\de los electrodos};
+\node[ctrl,below=of psd] (export) {\textbf{Evidencia / resultados}\\Tablas derivadas · configuración\\y exportación disponible};
+\draw[arr] (filters) -- (trend);
+\draw[arr] (filters) -- (psd);
+\draw[arr] (filters) -- (hist);
+\draw[arr] (filters) -- (detail);
+\draw[arr] (filters) -- (map);
+\draw[arr] (trend) -- (export);
+\draw[arr] (psd) -- (export);
+\draw[arr] (hist) -- (export);
+\end{tikzpicture}}
+\caption{Diseño funcional de las pestañas y sus controles compartidos. La vista de PSD es un resumen global del análisis exportado y no se recalcula al cambiar el intervalo visible.}
+\label{fig:dashboard}
+\end{figure}
 
-Se revisaron las derivaciones \texttt{FP1-F7},
-\texttt{F7-T7}, \texttt{FP2-F8} y \texttt{F8-T8},
-con escala común de amplitud y anotaciones oficiales.
-No se aplicó filtrado por el equipo en estas figuras.
+\subsection{Paneles}
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Contexto y controles}: registro, derivación bipolar, indicador, duración de ventana e intervalo en segundos desde el inicio del EDF.
+\item \textbf{Evolución temporal}: tendencia del indicador, anotaciones coincidentes y opción de ocultar ventanas marcadas por calidad.
+\item \textbf{Comparación espectral}: PSD mediana por estado y canal; se advierte que hay picos estrechos a 16 y 32 Hz compatibles con interferencia que requieren revisión.
+\item \textbf{Distribución}: histogramas y resumen descriptivo con mediana, cuartiles, RIC y n de ventanas.
+\item \textbf{Detalle EEG}: al solicitarlo, carga el EDF, comprueba la huella si está disponible y muestra trazado y espectrograma del segmento.
+\item \textbf{Ubicación de derivaciones}: esquema visual aproximado de los electrodos de la derivación seleccionada; no representa origen de crisis.
+\end{enumerate}
 
-Se observaron cambios de amplitud y morfología alrededor
-de la crisis, con diferencias entre derivaciones.
-Persistieron oscilaciones y transitorios después del final
-anotado de 3036 s.
+El estado “sin crisis anotada” se mantiene como tal y nunca se etiqueta “normal”. Las anotaciones oficiales y las banderas de calidad son conceptos distintos. Ocultar épocas marcadas cambia el conjunto descriptivo y debe mencionarse al reportar resultados. La interfaz no presenta valores p ni trata las ventanas solapadas como observaciones independientes.
 
-El intervalo 3070--3080 s presentó una deflexión lenta
-hacia 3073 s y oscilaciones rápidas hacia 3075--3076 s.
-Se propone revisarlo con el módulo de calidad, sin clasificarlo
-automáticamente como artefacto ni como otra crisis.
+\section{Validación, resultados y QA}
+Las pruebas automáticas verifican comportamiento de implementación, no utilidad clínica. El proyecto incluye pruebas de análisis, selección de canales, E/S, métricas, calidad y segmentación. La documentación QA indica escenarios controlados para evitar doble conteo de intervalos solapados, rechazar parámetros de época inválidos, conservar señales planas con métricas normalizadas ausentes y no confundir amplitud extrema con saturación.
 
-En las capturas no se aprecia señal plana prolongada
-ni recorte evidente. Esto no descarta anomalías breves
-ni demuestra buena calidad de todo el registro.
-La revisión se limita a cuatro canales y a los segmentos
-seleccionados.
+El análisis descriptivo debe reportar, por canal y estado, mediana, rango intercuartílico, número de ventanas y porcentaje marcado por calidad. Se debe comparar qué cambia al excluir las ventanas marcadas. Las épocas de 2, 4 y 8 s representan compromisos entre estabilidad espectral y precisión temporal; el filtrado bidireccional \texttt{sosfiltfilt} no es causal y no permite afirmar latencias operativas de tiempo real.
 
-\section{Conclusión de la auditoría}
+La revisión inicial documentada observó variaciones de amplitud y morfología alrededor de la crisis, diferencias entre derivaciones y transitorios posteriores a 3036 s. El intervalo 3070--3080 s se propone para inspección adicional, no para clasificarlo automáticamente como artefacto o crisis. La auditoría visual inicial cubre cuatro derivaciones y no demuestra calidad de todos los canales.
 
-Se verificaron estructura, montaje, unidades, frecuencia
-y anotaciones del registro, conservando su origen temporal.
-Se documentaron dos redundancias y sus exclusiones propuestas.
-La cabecera aportó límites de conversión y dejó el prefiltrado
-sin informar. La interpretación posterior debe combinar
-indicadores, trazado y evaluación completa de calidad.
+\subsection{Pruebas recomendadas para la entrega}
+\begin{enumerate}[leftmargin=*]
+\item Señal sinusoidal de 10 Hz: pico de PSD cercano a 10 Hz y predominio alfa, con tolerancia documentada.
+\item Duplicar amplitud: RMS y longitud de línea se duplican; potencia absoluta se cuadruplica; potencia relativa y entropía permanecen aproximadamente invariantes.
+\item Señal constante: RMS centrado nulo y métricas normalizadas ausentes.
+\item Anotación que corta una época: solapamiento correcto y etiqueta de transición.
+\item Cambio de voltios a microvoltios: factor $10^6$ para amplitud y $10^{12}$ para potencia.
+\item Cambiar canal o tiempo en el dashboard y verificar coherencia de todas las vistas.
+\end{enumerate}
 
-\subsection*{Fuentes de esta sección}
+\section{Limitaciones y conclusiones}
+El prototipo integra lectura EDF, auditoría de anotaciones, selección de canales, filtrado, segmentación, métricas, indicadores de calidad y visualización interactiva. Su valor es facilitar una revisión trazable de cambios cuantificables y de segmentos que requieren inspección.
 
-\begin{itemize}
-    \item Guttag, J. (2010).
-    \textit{CHB-MIT Scalp EEG Database}, versión 1.0.0.
-    PhysioNet.
-    \url{https://doi.org/10.13026/C2K01R}.
-    \item Caicedo-Rodríguez, P. E.
-    \textit{EEG y revisión de crisis epilépticas}.
-    Guía docente del laboratorio.
-    \url{https://pablocaicedor.github.io/laboratorios/SBVI/laboratorio_EEG_completo/laboratorio_EEG.html}.
-    \item Resumen oficial \texttt{chb01-summary.txt}
-    y resultados de auditoría del proyecto.
-    \item MNE-Python. Documentación de lectura EDF.
-    \url{https://mne.tools/stable/generated/mne.io.read_raw_edf.html}.
-\end{itemize}
+Las limitaciones principales son: un registro/paciente y una crisis en el núcleo descrito; ausencia de inferencia poblacional; anotaciones expertas como referencia temporal, no como etiquetas inferidas; artefactos que pueden imitar cambios fisiológicos; y filtrado no causal. Las ventanas solapadas no son independientes. Por tanto, los resultados deben presentarse como descriptivos, sin afirmar diagnóstico, predicción, causalidad o generalización clínica.
+
+\section{Referencias}
+\begin{enumerate}[leftmargin=*]
+\item Guttag, J. (2010). \textit{CHB-MIT Scalp EEG Database}, versión 1.0.0. PhysioNet. DOI: \href{https://doi.org/10.13026/C2K01R}{10.13026/C2K01R}.
+\item Caicedo-Rodríguez, P. E. \textit{EEG y revisión de crisis epilépticas}. Guía docente de laboratorio. \url{https://pablocaicedor.github.io/laboratorios/SBVI/laboratorio_EEG_completo/laboratorio_EEG.html}.
+\item MNE-Python, lectura EDF: \url{https://mne.tools/stable/generated/mne.io.read_raw_edf.html}.
+\item SciPy, Welch: \url{https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.welch.html}.
+\item SciPy, filtrado SOS bidireccional: \url{https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.sosfiltfilt.html}.
+\end{enumerate}
+\end{document}
