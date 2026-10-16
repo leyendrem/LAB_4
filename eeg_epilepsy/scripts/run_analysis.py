@@ -6,12 +6,12 @@
 Requiere data/raw/chb01_03.edf (scripts/download_data.py) y data/derived/channel_selection.json.
 """
 import argparse
-from pathlib import Path
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from eeg_epilepsy.analysis import run_analysis  # noqa: E402
+from eeg_epilepsy.analysis import run_analysis
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()

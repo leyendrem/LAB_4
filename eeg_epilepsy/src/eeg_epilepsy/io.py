@@ -29,7 +29,7 @@ def read_edf(path: str | Path) -> tuple[mne.io.BaseRaw, dict]:
         "format": "EDF",
         "fs": fs,
         "duration_s": float(raw.n_times / fs),
-        "n_channels": int(len(raw.ch_names)),
+        "n_channels": len(raw.ch_names),
         "units": "µV",
         "original_units": "V (MNE)",
         "conversion": "V_to_uV_once",

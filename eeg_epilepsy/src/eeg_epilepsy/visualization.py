@@ -4,10 +4,9 @@ No calcula diagnósticos ni modifica las métricas del pipeline.
 """
 from __future__ import annotations
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
-
 
 METRICS = {
     "rms_uv": ("Amplitud RMS centrada", "µV"),
@@ -49,12 +48,12 @@ def psd_figure(psd: pd.DataFrame, channel: str, window_s: float,
         fig.add_trace(go.Scatter(
             x=rows.freq_hz, y=y, mode="lines", connectgaps=False,
             name=f"{STATES[state]} (n={int(rows.n_epochs.iloc[0])})",
-            line=dict(color=color, width=2),
+            line={"color": color, "width": 2},
             hovertemplate="%{x:.1f} Hz<br>%{y:.3g} µV²/Hz<extra>%{fullData.name}</extra>",
         ))
     fig.update_layout(template="plotly_white", title=f"Distribución espectral · {channel}",
                       xaxis_title="Frecuencia (Hz)", yaxis_title="PSD mediana (µV²/Hz) · escala " + ("logarítmica" if logarithmic else "lineal"),
-                      legend=dict(orientation="h", y=-0.25))
+                      legend={"orientation": "h", "y": -0.25})
     fig.update_yaxes(type="log" if logarithmic else "linear")
     if not fig.data:
         fig.add_annotation(text="No hay espectros para esta selección.", x=0.5, y=0.5,
@@ -133,7 +132,7 @@ def histogram_figure(metrics: pd.DataFrame, channel: str, window_s: float,
                            x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False)
     fig.update_layout(template="plotly_white", title=f"{title} · Derivación {channel} · Ventana de {window_s:g} s",
                       xaxis_title=f"{title} ({unit})", yaxis_title="Ventanas de cada estado (%)",
-                      barmode="overlay", legend=dict(orientation="h", y=-0.25))
+                      barmode="overlay", legend={"orientation": "h", "y": -0.25})
     return fig
 
 
@@ -177,8 +176,8 @@ def trend_figure(
         template="plotly_white", title=f"{title} · {channel}",
         xaxis_title="Tiempo desde el inicio del registro (s)",
         yaxis_title=f"{title} ({unit})", hovermode="closest",
-        margin=dict(l=65, r=25, t=65, b=85),
-        legend=dict(orientation="h", y=-0.22),
+        margin={"l": 65, "r": 25, "t": 65, "b": 85},
+        legend={"orientation": "h", "y": -0.22},
     )
     if data.empty:
         fig.add_annotation(text="No hay datos para esta selección.",
@@ -200,14 +199,14 @@ def trend_figure(
              "<br>%{customdata[2]}<br>%{customdata[3]}<extra></extra>")
     fig.add_trace(go.Scatter(
         x=data.center_s, y=plotted, mode="lines", name=title,
-        line=dict(color="#146C94", width=2), connectgaps=False,
+        line={"color": "#146C94", "width": 2}, connectgaps=False,
         customdata=details.to_numpy(), hovertemplate=hover,
     ))
     if not exclude_flagged and flag.any():
         fig.add_trace(go.Scatter(
             x=data.loc[flag, "center_s"], y=values.loc[flag],
             mode="markers", name="Revisar calidad",
-            marker=dict(color="#C87800", symbol="diamond", size=8),
+            marker={"color": "#C87800", "symbol": "diamond", "size": 8},
             customdata=details.loc[flag].to_numpy(), hovertemplate=hover,
         ))
 
@@ -234,7 +233,7 @@ def trend_figure(
     fig.add_annotation(
         text=f"Ventanas de {window_s:g} s · Indicador descriptivo, no diagnóstico automático",
         x=0, y=-0.18, xref="paper", yref="paper", showarrow=False, xanchor="left",
-        font=dict(size=11, color="#586575"),
+        font={"size": 11, "color": "#586575"},
     )
     return fig
 
@@ -246,12 +245,12 @@ def signal_figure(raw_uv, filtered_uv, fs: float, start_s: float,
     fig = go.Figure()
     if show_raw:
         fig.add_trace(go.Scattergl(x=time, y=raw_uv, name="Original", mode="lines",
-                                  line=dict(color="#8995A5", width=1), opacity=0.65))
+                                  line={"color": "#8995A5", "width": 1}, opacity=0.65))
     fig.add_trace(go.Scattergl(x=time, y=filtered_uv, name="Filtrada", mode="lines",
-                              line=dict(color="#146C94", width=1)))
+                              line={"color": "#146C94", "width": 1}))
     fig.update_layout(template="plotly_white", title=f"Trazado EEG · {channel}",
                       xaxis_title="Tiempo desde el inicio del registro (s)",
-                      yaxis_title="Amplitud (µV)", legend=dict(orientation="h"))
+                      yaxis_title="Amplitud (µV)", legend={"orientation": "h"})
     if len(time):
         for event in events.itertuples():
             if event.end_s > time[0] and event.start_s < time[-1]:
@@ -271,7 +270,7 @@ def spectrogram_figure(x_uv, fs: float, start_s: float, channel: str,
     La entrada ya está en µV y filtrada. No usa la mediana por estado.
     """
     from scipy.signal import spectrogram
-    nperseg = int(round(segment_s * fs))
+    nperseg = round(segment_s * fs)
     if len(x_uv) < nperseg:
         raise ValueError(f"Selecciona al menos {segment_s:g} segundos para el espectrograma.")
     f, t, power = spectrogram(np.asarray(x_uv), fs=fs, window="hann",
@@ -281,7 +280,7 @@ def spectrogram_figure(x_uv, fs: float, start_s: float, channel: str,
     db = 10 * np.log10(np.maximum(power[keep], np.finfo(float).tiny))
     fig = go.Figure(go.Heatmap(
         x=start_s + t, y=f[keep], z=db, colorscale="Cividis",
-        colorbar=dict(title="dB<br>ref. 1 µV²/Hz"),
+        colorbar={"title": "dB<br>ref. 1 µV²/Hz"},
         hovertemplate="%{x:.2f} s<br>%{y:.1f} Hz<br>%{z:.1f} dB<extra></extra>",
     ))
     end_s = start_s + len(x_uv) / fs

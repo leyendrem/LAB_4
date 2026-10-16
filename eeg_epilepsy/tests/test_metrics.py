@@ -2,7 +2,13 @@ import numpy as np
 import pytest
 
 from eeg_epilepsy.metrics import (
-    BANDS, centered_rms, epoch_features, line_length, nan_features, psd_features, spectral_entropy,
+    BANDS,
+    centered_rms,
+    epoch_features,
+    line_length,
+    nan_features,
+    psd_features,
+    spectral_entropy,
 )
 
 FS = 256

@@ -1,10 +1,8 @@
 """Pruebas sobre el EDF real de CHB-MIT; se omiten si data/raw/chb01_03.edf no está descargado."""
-from pathlib import Path
 
 import pytest
 
 from eeg_epilepsy.analysis import ROOT, analyze_file, load_config, sha256_file
-import json
 
 EDF = ROOT / "data" / "raw" / "chb01_03.edf"
 pytestmark = pytest.mark.skipif(not EDF.exists(), reason="EDF real no descargado")

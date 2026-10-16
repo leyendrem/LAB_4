@@ -1,7 +1,7 @@
 """Primera pantalla de revisión EEG: tendencias de resultados existentes."""
-from pathlib import Path
 import json
 import sys
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -10,7 +10,16 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "src"))
 st.set_page_config(page_title="Revisión de EEG", page_icon="🧠", layout="wide")
 try:
-    from eeg_epilepsy.visualization import METRICS, trend_figure, psd_figure, histogram_figure, histogram_summary, signal_figure, spectrogram_figure, electrode_map_figure
+    from eeg_epilepsy.visualization import (
+        METRICS,
+        electrode_map_figure,
+        histogram_figure,
+        histogram_summary,
+        psd_figure,
+        signal_figure,
+        spectrogram_figure,
+        trend_figure,
+    )
 except (ModuleNotFoundError, ImportError):
     st.error("No se encontró la versión necesaria de visualization.py.")
     st.code(str(ROOT / "src/eeg_epilepsy/visualization.py"))
@@ -164,7 +173,8 @@ with detail_tab:
         @st.cache_data(max_entries=4, show_spinner="Leyendo y filtrando la derivación…")
         def load_channel(path, version, channel_name, filter_json, expected_hash):
             import hashlib
-            from eeg_epilepsy.io import read_edf, get_channel_uv
+
+            from eeg_epilepsy.io import get_channel_uv, read_edf
             from eeg_epilepsy.preprocessing import preprocess_channel
             if expected_hash:
                 with open(path, "rb") as source:
@@ -180,7 +190,6 @@ with detail_tab:
             finally:
                 raw.close()
         try:
-            import numpy as np
             used_config = metadata.get("config", config)
             fc = used_config["filter"]
             stages, fs = load_channel(str(edf_path), (edf_path.stat().st_mtime_ns, edf_path.stat().st_size),
@@ -193,7 +202,7 @@ with detail_tab:
             detail_start = st.number_input("Inicio del detalle (s)", min_value=interval[0],
                                            max_value=interval[1] - duration, value=interval[0], step=1.0)
             show_raw = st.checkbox("Comparar con señal original", value=False)
-            first, last = int(round(detail_start * fs)), int(round((detail_start + duration) * fs))
+            first, last = round(detail_start * fs), round((detail_start + duration) * fs)
             original = stages["raw_uv"][first:last]
             filtered = stages["filtered_uv"][first:last]
             st.plotly_chart(signal_figure(original, filtered, fs, first/fs, channel, session_events, show_raw),

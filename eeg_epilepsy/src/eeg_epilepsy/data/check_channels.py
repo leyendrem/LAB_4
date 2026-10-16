@@ -1,11 +1,10 @@
-from pathlib import Path
 import csv
 import json
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import mne
 import numpy as np
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 

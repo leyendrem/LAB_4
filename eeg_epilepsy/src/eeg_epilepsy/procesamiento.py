@@ -1,10 +1,12 @@
 """Ejemplo de procesamiento EEG con exclusiones documentadas y unidades explícitas."""
-from pathlib import Path
-import re
 import hashlib
+import re
+from pathlib import Path
+
 import mne
 import numpy as np
 from scipy.signal import butter, sosfiltfilt
+
 from eeg_epilepsy.data.channel_selection import select_analysis_channels
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]

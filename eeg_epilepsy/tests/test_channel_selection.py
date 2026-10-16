@@ -1,5 +1,7 @@
 import json
+
 from eeg_epilepsy.data.channel_selection import select_analysis_channels
+
 
 def test_exclusions_are_applied_without_mutating_original_names(tmp_path):
     config = {"excluded_channels":[{"name":"T8-P8-1","reason":"duplicate"},{"name":"P7-T7","reason":"redundant"}]}
