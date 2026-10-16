@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "src"))
 st.set_page_config(page_title="Revisión de EEG", page_icon="🧠", layout="wide")
 try:
-    from eeg_epilepsy.visualization import METRICS, trend_figure, psd_figure, histogram_figure, signal_figure, spectrogram_figure
+    from eeg_epilepsy.visualization import METRICS, trend_figure, psd_figure, histogram_figure, histogram_summary, signal_figure, spectrogram_figure
 except (ModuleNotFoundError, ImportError):
     st.error("No se encontró la versión necesaria de visualization.py.")
     st.code(str(ROOT / "src/eeg_epilepsy/visualization.py"))
@@ -33,7 +33,7 @@ def load_results(root: str, versions: tuple):
 
 
 st.title("Revisión de EEG")
-st.caption("Versión 0.3 · Tendencias, PSD, histogramas y detalle EEG")
+st.caption("Versión 0.4 · Resumen por estado con mediana y rango intercuartílico")
 try:
     config_path = ROOT / "config/analysis_config.json"
     config = json.loads(config_path.read_text())
@@ -133,6 +133,16 @@ with hist_tab:
                "Se excluyen ventanas de transición y valores no definidos.")
     st.plotly_chart(histogram_figure(selected, channel, window, metric, interval, exclude),
                     width="stretch", key="histogram")
+    summary = histogram_summary(selected, channel, window, metric, interval, exclude)
+    st.markdown("**Resumen del indicador por estado**")
+    if summary.empty:
+        st.info("No hay ventanas válidas para calcular el resumen en esta selección.")
+    else:
+        st.dataframe(summary.style.format({col: "{:.3g}" for col in summary.columns[2:]}),
+                     hide_index=True, width="stretch")
+    st.caption("Q1 y Q3 son los percentiles 25 y 75: delimitan el 50% central de los valores. "
+               "El rango intercuartílico (RIC) es Q3 − Q1. Se usan las mismas ventanas y filtros del histograma. "
+               "n cuenta ventanas, no pacientes; las ventanas solapadas no son observaciones independientes.")
     st.caption("El solapamiento entre distribuciones y el número de ventanas deben considerarse al interpretar. No se realizan pruebas de significancia ni clasificación diagnóstica.")
 
 with detail_tab:
@@ -204,4 +214,3 @@ with st.expander("Detalles del análisis"):
     st.caption("La selección de ventana muestra resultados ya calculados; no vuelve a filtrar la señal.")
 
 st.caption("Prototipo académico de revisión retrospectiva. Incluye anotaciones oficiales; no realiza detección ni diagnóstico automático.")
-
