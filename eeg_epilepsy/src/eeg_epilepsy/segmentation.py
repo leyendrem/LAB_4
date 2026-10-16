@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 import numpy as np
 
 
@@ -14,7 +15,28 @@ class Epoch:
 
 def interval_overlap(a: float, b: float, intervals: list[tuple[float, float]]) -> float:
     """Longitud de la unión de intersecciones entre una época y crisis oficiales."""
-    return float(sum(max(0.0, min(b, v) - max(a, u)) for u, v in intervals))
+    if not np.isfinite(a) or not np.isfinite(b) or b < a:
+        raise ValueError("La época debe tener límites finitos y end_s >= start_s.")
+    clipped = []
+    for u, v in intervals:
+        if not np.isfinite(u) or not np.isfinite(v) or v < u:
+            raise ValueError("Los intervalos anotados deben tener límites finitos y end_s >= start_s.")
+        left, right = max(a, u), min(b, v)
+        if right > left:
+            clipped.append((left, right))
+    total = 0.0
+    current_start = current_end = None
+    for left, right in sorted(clipped):
+        if current_start is None:
+            current_start, current_end = left, right
+        elif left <= current_end:
+            current_end = max(current_end, right)
+        else:
+            total += current_end - current_start
+            current_start, current_end = left, right
+    if current_start is not None:
+        total += current_end - current_start
+    return float(total)
 
 
 def label_epoch(
@@ -42,8 +64,12 @@ def make_epochs(
     step_fraction: float = 0.5,
 ) -> list[Epoch]:
     """Crea épocas de una duración concreta y avance igual a la mitad."""
-    if duration_s <= 0:
+    if not np.isfinite(fs) or fs <= 0:
+        raise ValueError("fs debe ser positiva y finita.")
+    if not np.isfinite(duration_s) or duration_s <= 0:
         raise ValueError("duration_s debe ser positiva.")
+    if not np.isfinite(step_fraction) or step_fraction <= 0 or step_fraction > 1:
+        raise ValueError("step_fraction debe estar en el intervalo (0, 1].")
     n = round(duration_s * fs)
     step = max(1, round(n * step_fraction))
     if n > n_samples:
